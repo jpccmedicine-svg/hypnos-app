@@ -232,7 +232,7 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="brand"><h1>HYPNOS</h1><span class="sub">Paliativos · v1.1</span></div>
+    <div class="brand"><h1>HYPNOS</h1><span class="sub">Paliativos · v1.2</span></div>
     <div class="toplinks">
       <button onclick="exportJSON()">Exportar copia</button>
       <button onclick="document.getElementById('imp').click()">Importar</button>
@@ -249,7 +249,7 @@
   <div class="disclaimer">
     <b>Herramienta de apoyo al cálculo. No sustituye el juicio clínico.</b>
     Todo cálculo debe ser revisado y validado por un médico antes de su uso en pacientes.
-    Uso personal. Factores de equivalencia orientativos (fuente: consenso español / tabla AECPAL-1aria 2022), editables y sujetos a validación local.
+    Uso personal. Equivalencias de opioides ancladas a la Tabla 1 del Anexo 6 del Plan de Optimización de Opioides en Dolor Crónico No Oncológico (Ministerio de Sanidad); compatibilidades SC según Manual ICO. Factores editables y sujetos a validación local.
   </div>
 
   <!-- AJUSTES -->
@@ -466,7 +466,7 @@
     </div>
 
     <p class="mini" style="text-align:center;margin-top:18px;color:var(--ink-faint)">
-      Factores editables · Fuente: consenso español (AECPAL-1aria 2022) · Fentanilo y buprenorfina TD por tabla de tramos
+      Factores editables · Fuente: Anexo 6, Plan de Optimización de Opioides (Ministerio de Sanidad) · Fentanilo y buprenorfina TD por tabla oficial de tramos
     </p>
   </div><!-- /view-opioid -->
 
@@ -552,26 +552,66 @@ const INFUSERS = [
 ];
 
 /* ============================================================
+   FUENTES CLÍNICAS — capa versionada, una entrada por documento.
+   Cada regla de OPIOIDS_BASE referencia una fuente por id (src)
+   y, si procede, la sección exacta (srcRef).
+   [Fase 2] Verificado contra el PDF oficial el 2026-07-27.
+   ============================================================ */
+const CLINICAL_SOURCES = {
+  msanidad_opioides: {
+    name:"Plan de Optimización de Opioides en Dolor Crónico No Oncológico — Documento de apoyo para profesionales sanitarios",
+    org:"Ministerio de Sanidad (España)",
+    url:"https://www.sanidad.gob.es/areas/farmacia/publicaciones/planOptimizacion/docs/opioides/Documentos_de_apoyo_al_Plan._Uso_de_opioides_para_dolor_cronico_no_oncologico.pdf",
+    retrieved:"2026-07-27"
+  },
+  ico_manual: {
+    name:"Manual de control de síntomas en pacientes con cáncer avanzado y terminal, 4ª ed., cap. 15",
+    org:"Institut Català d'Oncologia (ICO)", url:null, retrieved:null
+  },
+  aecpal_1aria: {
+    name:"Tabla de equivalencia aproximada entre opioides (2022)",
+    org:"AECPAL / 1aria.com",
+    url:"https://1aria.com/images/entry-pdfs/tabla-de-equivalencia-aproximada-entre-opioides-2022.pdf",
+    retrieved:null
+  }
+};
+function srcLine(op){
+  if(!op.src) return "";
+  const s=CLINICAL_SOURCES[op.src]; if(!s) return "";
+  return ` · <span class="mini">Fuente: ${esc(s.name)}${op.srcRef?` (${esc(op.srcRef)})`:""}</span>`;
+}
+
+/* ============================================================
    EQUIVALENCIAS OPIOIDES → MORFINA ORAL (mg/día)
-   Fuente base: consenso español / tabla AECPAL-1aria 2022.
-   Factores editables por el usuario (state.factors).
+   [Fase 2] Factores anclados a la Tabla 1 del Anexo 6 del Plan de
+   Optimización de Opioides en DCNO (Ministerio de Sanidad), verificados
+   punto a punto contra el PDF oficial (ver CLINICAL_SOURCES). Factores
+   editables por el usuario (state.factors); fuente citada por regla.
    Fentanilo y buprenorfina TD: por tabla de tramos (no factor lineal).
    ============================================================ */
 const OPIOIDS_BASE = [
   { id:"morfina_vo", name:"Morfina oral", unit:"mg/día", type:"factor", factor:1, fixed:true },
-  { id:"morfina_sc", name:"Morfina subcutánea", unit:"mg/día", type:"factor", factor:2, note:"SC×2 = oral" },
-  { id:"oxicodona", name:"Oxicodona oral", unit:"mg/día", type:"factor", factor:1.5 },
+  { id:"morfina_sc", name:"Morfina subcutánea", unit:"mg/día", type:"factor", factor:2, note:"SC×2 = oral",
+    src:"msanidad_opioides", srcRef:"Anexo 6, Tabla 1" },
+  { id:"oxicodona", name:"Oxicodona oral", unit:"mg/día", type:"factor", factor:1.5,
+    src:"msanidad_opioides", srcRef:"Anexo 6, Tabla 1" },
   { id:"oxicodona_naloxona", name:"Oxicodona/naloxona (Targin)", unit:"mg/día", type:"factor", factor:1.5,
-    note:"por componente oxicodona" },
-  { id:"tapentadol", name:"Tapentadol retard", unit:"mg/día", type:"factor", factor:0.4 },
-  { id:"tramadol", name:"Tramadol", unit:"mg/día", type:"factor", factor:0.1 },
-  { id:"codeina", name:"Codeína", unit:"mg/día", type:"factor", factor:0.083 },
-  { id:"hidromorfona", name:"Hidromorfona oral", unit:"mg/día", type:"factor", factor:5 },
+    note:"por componente oxicodona", src:"msanidad_opioides", srcRef:"Anexo 6, Tabla 1" },
+  { id:"tapentadol", name:"Tapentadol retard", unit:"mg/día", type:"factor", factor:0.4, maxDoseDay:500,
+    src:"msanidad_opioides", srcRef:"Anexo 6, Tabla 1" },
+  { id:"tramadol", name:"Tramadol", unit:"mg/día", type:"factor", factor:0.1, maxDoseDay:400,
+    src:"msanidad_opioides", srcRef:"Anexo 6, Tabla 1" },
+  { id:"codeina", name:"Codeína", unit:"mg/día", type:"factor", factor:0.1,
+    src:"msanidad_opioides", srcRef:"Anexo 6, Tabla 1 (200 mg codeína = 20 mg morfina oral)" },
+  { id:"hidromorfona", name:"Hidromorfona oral", unit:"mg/día", type:"factor", factor:5,
+    src:"msanidad_opioides", srcRef:"Anexo 6, Tabla 1" },
   { id:"buprenorfina_td", name:"Buprenorfina transdérmica", unit:"µg/h", type:"table",
-    table:[[35,60],[52.5,90],[70,120],[105,180],[140,240]] },
+    table:[[35,60],[52.5,90],[70,120],[105,180],[140,240]],
+    src:"msanidad_opioides", srcRef:"Anexo 6, Tabla 1 (parche cambiado cada 3 días)" },
   { id:"fentanilo_td", name:"Fentanilo transdérmico", unit:"µg/h", type:"table",
-    table:[[12,30],[25,60],[50,120],[75,180],[100,240],[125,300]],
-    note:"tramo conservador; rotación ~150:1" },
+    table:[[12,30],[25,60],[37,90],[50,120],[75,180],[100,240],[150,360]],
+    note:"Válido si el parche se cambia cada 3 días.",
+    src:"msanidad_opioides", srcRef:"Anexo 6, Tabla 1 (parche cambiado cada 3 días)" },
   { id:"metadona", name:"Metadona", unit:"mg/día", type:"blocked",
     note:"Conversión no lineal y peligrosa. Requiere manejo experto; no se calcula automáticamente." }
 ];
@@ -969,7 +1009,7 @@ function sendFeedback(){
     "— En qué pantalla (Infusor / Conversor):\n\n"+
     "— Fármaco o dato implicado (si aplica):\n\n\n"+
     "-------------------------\n"+
-    "Enviado desde HYPNOS v1.1"
+    "Enviado desde HYPNOS v1.2"
   );
   window.location.href = `mailto:${DEV_EMAIL}?subject=${asunto}&body=${cuerpo}`;
 }
@@ -1014,12 +1054,12 @@ function onOpSrcChange(){
     fe.innerHTML=`Factor → morfina oral: <input type="number" step="any" value="${cur}" `+
       `onchange="setFactor('${op.id}',this.value)"> `+
       `<span onclick="resetFactor('${op.id}')" style="cursor:pointer;text-decoration:underline">restaurar</span>`+
-      (op.note?` · <i>${op.note}</i>`:``);
+      (op.note?` · <i>${esc(op.note)}</i>`:``)+srcLine(op);
   } else if(op.type==="table"){
-    fe.innerHTML=`Conversión por tabla de tramos (${op.unit}). ${op.note||""}`;
+    fe.innerHTML=`Conversión por tabla de tramos (${op.unit}). ${esc(op.note||"")}`+srcLine(op);
   } else if(op.type==="blocked"){
-    fe.innerHTML=`<span style="color:var(--amber)">${op.note}</span>`;
-  } else fe.innerHTML=op.note||"";
+    fe.innerHTML=`<span style="color:var(--amber)">${esc(op.note)}</span>`;
+  } else fe.innerHTML=esc(op.note||"");
   convert();
 }
 function setFactor(id,val){
@@ -1108,7 +1148,13 @@ function convert(){
   if(conv.approx)
     alerts.push(["amber","Dosis fuera de los tramos tabulados: valor extrapolado, mayor incertidumbre."]);
   if(moReduced>=90)
-    alerts.push(["amber",`Dosis alta (${R(moReduced,0)} mg morfina oral/día ≥ 90 DEM). Reevaluar beneficio-riesgo.`]);
+    // [Fase 2] Aviso puramente informativo (nunca bloquea). El techo de 90 mg DEM/día
+    // es una recomendación para dolor crónico NO oncológico (Anexo 4, tolerancia),
+    // no un límite establecido en cuidados paliativos.
+    alerts.push(["amber",`Dosis alta (${R(moReduced,0)} mg morfina oral/día ≥ 90 DEM). Techo recomendado para dolor crónico NO oncológico (Anexo 4, Plan de Optimización de Opioides, Ministerio de Sanidad); no es un límite establecido en cuidados paliativos. Aviso informativo, no bloquea el cálculo.`]);
+  if(op.maxDoseDay && dose>op.maxDoseDay)
+    // [Fase 2] Techo de dosis del propio fármaco (no de morfina equivalente), Anexo 6.
+    alerts.push(["amber",`${op.name}: la dosis introducida (${R(dose,0)} ${op.unit}) supera el techo recomendado de ${op.maxDoseDay} mg/día (Anexo 6, Plan de Optimización de Opioides). Aviso informativo, no bloquea el cálculo.`]);
   if(op.id==="fentanilo_td")
     alerts.push(["blue","Fentanilo TD: al retirar el parche persiste liberación ~17 h. Iniciar perfusión con dosis reducida y cubrir con rescates las primeras 12-24 h."]);
   if(op.id==="oxicodona_naloxona")
@@ -1178,6 +1224,13 @@ load(); hydrate();
   console.assert(R(mi.totalDose,2)===150 && R(mi.volume,2)===30 && mi.toOpen===3,"Golden midazolam falla");
   console.assert(R(Engine.realDurationH(250,2)/24,2)===5.21,"Golden duración 250/2 falla");
   console.assert(R(Engine.realDurationH(200,2)/24,2)===4.17,"Golden duración 200/2 falla");
+  // [Fase 2] Casos dorados de equivalencias ancladas al Anexo 6 (MSanidad)
+  const cod=toOralMorphine(opById("codeina"),200,{});
+  console.assert(R(cod.mo,2)===20,"Golden codeína (Anexo 6) falla");
+  const fen90=toOralMorphine(opById("fentanilo_td"),37,{});
+  console.assert(R(fen90.mo,2)===90,"Golden fentanilo 37µg/h→90mg (Anexo 6) falla");
+  const fen360=toOralMorphine(opById("fentanilo_td"),150,{});
+  console.assert(R(fen360.mo,2)===360,"Golden fentanilo 150µg/h→360mg (Anexo 6) falla");
   console.log("HYPNOS · casos dorados ejecutados");
 })();
 </script>
