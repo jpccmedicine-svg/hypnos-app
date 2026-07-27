@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0b1020">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="HYPNOS">
+<title>HYPNOS — Constructor de infusores</title>
+<link rel="manifest" href='data:application/manifest+json,{"name":"HYPNOS","short_name":"HYPNOS","start_url":".","display":"standalone","background_color":"%230b1020","theme_color":"%230b1020","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 192 192%22%3E%3Crect width=%22192%22 height=%22192%22 fill=%22%230b1020%22/%3E%3Ctext x=%2296%22 y=%22120%22 font-size=%2270%22 fill=%22%237c9cf0%22 text-anchor=%22middle%22 font-family=%22serif%22%3EH%3C/text%3E%3C/svg%3E","sizes":"192x192","type":"image/svg+xml"}]}'>
+<style>
+  :root{
+    /* Profundidad: azul noche -> casi negro azulado */
+    --bg:#080b16; --bg2:#0d1224;
+    --panel:rgba(24,31,54,.72); --panel-solid:#161d34; --panel2:rgba(31,40,70,.6);
+    --line:rgba(122,140,200,.16); --line-strong:rgba(122,140,200,.28);
+    --ink:#f2f4fc; --ink-dim:#a8b1d4; --ink-faint:#6d78a4;
+    --accent:#7c9cf0; --accent2:#a385f5; --accent-ink:#0a0f1e;
+    --glow:rgba(124,156,240,.35);
+    --red:#ff6b7a; --red-bg:rgba(120,32,48,.28); --red-line:rgba(255,107,122,.5);
+    --amber:#ffc94d; --amber-bg:rgba(120,92,20,.24); --amber-line:rgba(255,201,77,.45);
+    --blue:#5fb3ff; --blue-bg:rgba(24,72,112,.28); --blue-line:rgba(95,179,255,.42);
+    --gray:#939dc4; --gray-bg:rgba(64,74,110,.26); --gray-line:rgba(147,157,196,.35);
+    --ok:#57d9a3;
+    --r:18px; --r-sm:12px;
+    --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+    --display:"Hoefler Text","Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --mono:"SF Mono",ui-monospace,Menlo,monospace;
+    --shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 8px 24px -12px rgba(0,0,0,.7);
+    --shadow-lg:0 1px 0 rgba(255,255,255,.05) inset, 0 20px 48px -20px rgba(0,0,0,.8);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;color:var(--ink);font-family:var(--font);
+    font-size:16px;line-height:1.45;-webkit-text-size-adjust:100%;
+    font-feature-settings:"cv02","cv03","cv04","ss01";text-rendering:optimizeLegibility;
+    -webkit-font-smoothing:antialiased}
+  body{
+    background:
+      radial-gradient(1200px 620px at 50% -10%, #131c3a 0%, transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(120,92,200,.14) 0%, transparent 55%),
+      linear-gradient(180deg, var(--bg2) 0%, var(--bg) 42%, #05070f 100%);
+    background-attachment:fixed;min-height:100vh;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+  .wrap{max-width:540px;margin:0 auto;padding:0 16px 128px}
+
+  /* ---- Cabecera ---- */
+  header{position:sticky;top:0;z-index:20;
+    background:linear-gradient(180deg, var(--bg) 55%, rgba(8,11,22,.85) 80%, transparent);
+    -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+    padding:calc(env(safe-area-inset-top) + 14px) 0 10px;margin:0 -16px;padding-left:16px;padding-right:16px}
+  .brand{display:flex;align-items:baseline;gap:12px}
+  .brand h1{font-family:var(--display);font-weight:600;letter-spacing:.30em;font-size:27px;margin:0;
+    background:linear-gradient(180deg,#fff, #b9c4ef 90%);-webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;text-indent:.30em}
+  .brand .sub{color:var(--ink-faint);font-size:10px;letter-spacing:.34em;text-transform:uppercase;font-weight:600}
+  .brand .sub::before{content:"";display:inline-block;width:14px;height:1px;background:var(--accent);
+    vertical-align:middle;margin-right:8px;opacity:.6}
+
+  .toplinks{display:flex;gap:7px;margin-top:12px}
+  .toplinks button{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--ink-dim);
+    border-radius:11px;padding:9px;font-size:12px;font-weight:500;cursor:pointer;letter-spacing:.01em;
+    -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);transition:.18s}
+  .toplinks button:active{transform:scale(.97)}
+
+  /* ---- Pestañas ---- */
+  .tabs{display:flex;gap:6px;margin-top:12px;padding:5px;background:rgba(10,14,28,.55);
+    border:1px solid var(--line);border-radius:15px}
+  .tabs button{flex:1;background:transparent;border:none;color:var(--ink-faint);
+    border-radius:11px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;transition:.22s cubic-bezier(.4,0,.2,1);letter-spacing:.01em}
+  .tabs button.on{background:linear-gradient(180deg,rgba(124,156,240,.20),rgba(124,156,240,.08));
+    color:#fff;box-shadow:0 0 0 1px rgba(124,156,240,.4), 0 6px 16px -8px var(--glow)}
+
+  .view{display:none;animation:rise .34s cubic-bezier(.2,.7,.2,1)}
+  .view.on{display:block}
+  @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  /* ---- Aviso ---- */
+  .disclaimer{background:linear-gradient(180deg,rgba(124,156,240,.06),transparent),var(--panel);
+    border:1px solid var(--line);border-radius:var(--r);padding:13px 15px;font-size:12.5px;
+    color:var(--ink-dim);margin:14px 0;line-height:1.5;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+  .disclaimer b{color:var(--ink);font-weight:600}
+
+  /* ---- Tarjetas ---- */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+    padding:18px;margin:14px 0;box-shadow:var(--shadow);
+    -webkit-backdrop-filter:blur(16px) saturate(1.3);backdrop-filter:blur(16px) saturate(1.3);position:relative}
+  .card::before{content:"";position:absolute;inset:0;border-radius:var(--r);pointer-events:none;
+    background:linear-gradient(180deg,rgba(255,255,255,.05),transparent 40%);mix-blend-mode:overlay}
+  .card h2{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);
+    margin:0 0 14px;font-weight:700;display:flex;align-items:center;gap:9px}
+  .card h2 .n{width:20px;height:20px;border-radius:7px;background:linear-gradient(180deg,rgba(124,156,240,.25),rgba(124,156,240,.1));
+    color:var(--accent);display:inline-flex;align-items:center;justify-content:center;font-size:11px;
+    box-shadow:inset 0 0 0 1px rgba(124,156,240,.35)}
+
+  label{display:block;font-size:12px;color:var(--ink-dim);margin:0 0 6px;letter-spacing:.01em;font-weight:500}
+  select,input,button{font-family:var(--font);font-size:16px}
+  select,input[type=number],input[type=text]{width:100%;background:rgba(10,14,28,.5);
+    border:1px solid var(--line);color:var(--ink);border-radius:var(--r-sm);padding:13px 13px;appearance:none;
+    transition:.18s;font-variant-numeric:tabular-nums}
+  select:focus,input:focus{outline:none;border-color:var(--accent);
+    box-shadow:0 0 0 3px rgba(124,156,240,.18)}
+  input[type=number]{-moz-appearance:textfield}
+  select{padding-right:36px;background-image:linear-gradient(45deg,transparent 50%,var(--ink-faint) 50%),linear-gradient(135deg,var(--ink-faint) 50%,transparent 50%);
+    background-position:calc(100% - 18px) center,calc(100% - 13px) center;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+
+  .seg{display:flex;gap:9px;flex-wrap:wrap}
+  .seg button{flex:1;min-width:0;background:rgba(10,14,28,.4);border:1px solid var(--line);
+    color:var(--ink-dim);border-radius:var(--r-sm);padding:14px 8px;cursor:pointer;transition:.2s cubic-bezier(.4,0,.2,1);
+    display:flex;flex-direction:column;align-items:center;gap:3px;line-height:1.15}
+  .seg button .big{font-size:15px;color:var(--ink);font-weight:600;letter-spacing:.01em}
+  .seg button .sm{font-size:10.5px;color:var(--ink-faint);font-variant-numeric:tabular-nums;letter-spacing:.02em}
+  .seg button:active{transform:scale(.97)}
+  .seg button.on{border-color:transparent;
+    background:linear-gradient(180deg,rgba(124,156,240,.18),rgba(124,156,240,.06));
+    box-shadow:0 0 0 1px rgba(124,156,240,.5), 0 8px 20px -12px var(--glow)}
+  .seg button.on .big{color:#fff}
+  .seg button.on .sm{color:var(--accent)}
+
+  .row,.row3{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    background:linear-gradient(180deg,#8faaf4,#6d8ce8);color:var(--accent-ink);border:none;
+    border-radius:var(--r-sm);padding:14px 16px;font-weight:650;cursor:pointer;width:100%;letter-spacing:.01em;
+    box-shadow:0 1px 0 rgba(255,255,255,.3) inset, 0 8px 20px -8px var(--glow);transition:.18s}
+  .btn:active{transform:scale(.98);box-shadow:0 1px 0 rgba(255,255,255,.2) inset, 0 4px 12px -8px var(--glow)}
+  .btn.ghost{background:rgba(10,14,28,.4);color:var(--accent);border:1px solid var(--line-strong);box-shadow:none}
+  .drug-add{display:grid;grid-template-columns:1fr;gap:11px}
+  .mini{font-size:12px;color:var(--ink-faint)}
+  .hint{font-size:12px;color:var(--ink-faint);margin-top:7px;line-height:1.5}
+
+  /* ---- Línea de fármaco ---- */
+  .drugline{background:rgba(10,14,28,.4);border:1px solid var(--line);border-radius:var(--r-sm);
+    padding:14px;margin:9px 0;transition:.2s}
+  .drugline .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .drugline .nm{font-weight:650;font-size:15px;letter-spacing:.01em}
+  .drugline .pres{font-size:11.5px;color:var(--ink-faint);margin-top:2px}
+  .drugline .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px;text-align:center}
+  .drugline .grid div span{display:block}
+  .drugline .grid .k{font-size:9.5px;color:var(--ink-faint);letter-spacing:.05em;text-transform:uppercase}
+  .drugline .grid .v{font-size:15px;font-weight:650;margin-top:3px;font-variant-numeric:tabular-nums}
+  .x{background:none;border:none;color:var(--ink-faint);font-size:20px;cursor:pointer;padding:0 4px;line-height:1;transition:.15s}
+  .x:active{color:var(--red);transform:scale(.9)}
+
+  /* ---- Totales ---- */
+  .totals{margin-top:10px}
+  .totrow{display:flex;justify-content:space-between;padding:11px 0;border-top:1px solid var(--line);font-size:14px}
+  .totrow .v{font-weight:600;font-variant-numeric:tabular-nums}
+  .totrow.big{align-items:baseline;padding-top:14px}
+  .totrow.big .v{font-size:22px;color:var(--accent);font-weight:700}
+
+  /* ---- Héroe de resultado (firma) ---- */
+  .bigresult{position:relative;border-radius:var(--r);padding:22px 18px;margin:4px 0 12px;text-align:center;
+    background:
+      radial-gradient(120% 120% at 50% 0%, rgba(124,156,240,.16), transparent 70%),
+      linear-gradient(180deg, rgba(31,40,70,.7), rgba(16,21,40,.7));
+    border:1px solid rgba(124,156,240,.35);
+    box-shadow:0 0 0 1px rgba(124,156,240,.08), 0 24px 60px -28px var(--glow), inset 0 1px 0 rgba(255,255,255,.06);
+    overflow:hidden}
+  .bigresult::after{content:"";position:absolute;top:-50%;left:50%;transform:translateX(-50%);
+    width:200%;height:120%;background:radial-gradient(closest-side,var(--glow),transparent 70%);opacity:.5;pointer-events:none}
+  .bigresult .lbl{position:relative;font-size:10.5px;text-transform:uppercase;letter-spacing:.18em;color:var(--accent);font-weight:700}
+  .bigresult .val{position:relative;font-size:38px;font-weight:700;margin-top:6px;letter-spacing:-.01em;
+    font-variant-numeric:tabular-nums;line-height:1;
+    background:linear-gradient(180deg,#fff,#cdd8fb);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .bigresult .val small{font-size:16px;color:var(--ink-dim);font-weight:400;-webkit-text-fill-color:var(--ink-dim)}
+
+  .subres{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:11px}
+  .subres .box{background:rgba(10,14,28,.4);border:1px solid var(--line);border-radius:var(--r-sm);padding:13px;text-align:center;transition:.2s}
+  .subres .box .k{font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-faint);font-weight:600}
+  .subres .box .v{font-size:20px;font-weight:650;margin-top:4px;font-variant-numeric:tabular-nums}
+
+  .factedit{font-size:11.5px;color:var(--ink-faint);margin-top:8px;line-height:1.7}
+  .factedit input{width:66px;background:rgba(10,14,28,.5);border:1px solid var(--line);color:var(--ink);
+    border-radius:8px;padding:4px 7px;font-size:12px;text-align:center;font-variant-numeric:tabular-nums}
+
+  /* ---- Alertas: barra lateral por color ---- */
+  .alert{position:relative;border-radius:var(--r-sm);padding:11px 13px 11px 15px;margin:9px 0;font-size:13px;
+    display:flex;gap:10px;align-items:flex-start;line-height:1.45;overflow:hidden;border:1px solid transparent}
+  .alert::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:3px}
+  .alert .dot{width:7px;height:7px;border-radius:50%;margin-top:5px;flex:none}
+  .a-red{background:var(--red-bg);color:#ffdce1;border-color:var(--red-line)} .a-red::before{background:var(--red)} .a-red .dot{background:var(--red)}
+  .a-amber{background:var(--amber-bg);color:#ffedbf;border-color:var(--amber-line)} .a-amber::before{background:var(--amber)} .a-amber .dot{background:var(--amber)}
+  .a-blue{background:var(--blue-bg);color:#d3ecff;border-color:var(--blue-line)} .a-blue::before{background:var(--blue)} .a-blue .dot{background:var(--blue)}
+  .a-gray{background:var(--gray-bg);color:#d2d8ee;border-color:var(--gray-line)} .a-gray::before{background:var(--gray)} .a-gray .dot{background:var(--gray)}
+  .a-ok{background:rgba(20,64,42,.3);color:#c7f2db;border-color:rgba(87,217,163,.4)} .a-ok::before{background:var(--ok)} .a-ok .dot{background:var(--ok)}
+
+  /* ---- Desglose ---- */
+  details{margin-top:11px;border:1px solid var(--line);border-radius:var(--r-sm);background:rgba(10,14,28,.35);overflow:hidden}
+  summary{padding:12px 14px;cursor:pointer;font-size:13px;color:var(--accent);list-style:none;font-weight:550;transition:.15s}
+  summary::-webkit-details-marker{display:none}
+  summary::before{content:"›";display:inline-block;color:var(--ink-faint);margin-right:8px;transition:.2s;font-weight:700}
+  details[open] summary::before{transform:rotate(90deg)}
+  .calc{padding:2px 14px 14px;font-size:12px;color:var(--ink-dim);font-family:var(--mono);white-space:pre-wrap;line-height:1.7;font-variant-numeric:tabular-nums}
+
+  .foot{display:flex;gap:10px;margin-top:15px}
+  .empty{color:var(--ink-faint);font-size:13px;text-align:center;padding:18px 0}
+
+  /* ---- Toast ---- */
+  .toast{position:fixed;left:50%;bottom:calc(28px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(8px);
+    background:rgba(20,26,46,.92);border:1px solid rgba(124,156,240,.5);color:var(--ink);padding:12px 20px;
+    border-radius:30px;font-size:14px;font-weight:500;opacity:0;pointer-events:none;transition:.28s cubic-bezier(.2,.7,.2,1);z-index:50;
+    -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);box-shadow:0 12px 32px -12px rgba(0,0,0,.7)}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  .check{display:flex;gap:11px;align-items:flex-start;font-size:13px;color:var(--ink-dim);margin-top:10px;line-height:1.5}
+  .check input{width:21px;height:21px;flex:none;margin-top:1px;accent-color:var(--accent);border-radius:6px}
+
+  .settingsrow{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line)}
+  .settingsrow:first-child{border-top:none}
+  .settingsrow label{margin:0}
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none !important;transition:none !important}
+  }
+
+  /* ---- Pie de autoría ---- */
+  .appfoot{margin-top:36px;padding:26px 18px calc(20px + env(safe-area-inset-bottom));text-align:center;
+    border-top:1px solid var(--line)}
+  .appfoot .sig{font-family:var(--display);letter-spacing:.28em;font-size:16px;text-indent:.28em;
+    background:linear-gradient(180deg,#fff,#8f9ccb);-webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;margin-bottom:8px}
+  .appfoot .by{font-size:12.5px;color:var(--ink-dim);letter-spacing:.01em}
+  .appfoot .by b{color:var(--ink);font-weight:600}
+  .appfoot .cr{font-size:11px;color:var(--ink-faint);margin-top:4px;letter-spacing:.03em}
+  .foot-report{margin-top:16px;background:rgba(10,14,28,.4);border:1px solid var(--line-strong);
+    color:var(--accent);border-radius:11px;padding:11px 18px;font-size:13px;font-weight:550;cursor:pointer;
+    -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);transition:.18s}
+  .foot-report:active{transform:scale(.97)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><h1>HYPNOS</h1><span class="sub">Paliativos · v1.1</span></div>
+    <div class="toplinks">
+      <button onclick="exportJSON()">Exportar copia</button>
+      <button onclick="document.getElementById('imp').click()">Importar</button>
+      <button onclick="toggleSettings()">Ajustes</button>
+      <button onclick="sendFeedback()">Sugerencias</button>
+    </div>
+    <input type="file" id="imp" accept="application/json" style="display:none" onchange="importJSON(event)">
+    <div class="tabs">
+      <button id="tab-infuser" class="on" onclick="showView('infuser')">Infusor</button>
+      <button id="tab-opioid" onclick="showView('opioid')">Conversor opioide</button>
+    </div>
+  </header>
+
+  <div class="disclaimer">
+    <b>Herramienta de apoyo al cálculo. No sustituye el juicio clínico.</b>
+    Todo cálculo debe ser revisado y validado por un médico antes de su uso en pacientes.
+    Uso personal. Factores de equivalencia orientativos (fuente: consenso español / tabla AECPAL-1aria 2022), editables y sujetos a validación local.
+  </div>
+
+  <!-- AJUSTES -->
+  <div class="card" id="settings" style="display:none">
+    <h2>Ajustes del centro</h2>
+    <div class="settingsrow">
+      <label>Volumen de purgado de la línea (ml)</label>
+      <input type="number" id="purge" value="0.5" step="0.1" min="0" style="width:90px" oninput="recalc()">
+    </div>
+    <div class="settingsrow">
+      <label>Umbral de aviso por nº de ampollas</label>
+      <input type="number" id="ampWarn" value="40" step="1" min="1" style="width:90px" oninput="recalc()">
+    </div>
+    <div class="settingsrow">
+      <label>Umbral de llenado parcial (%)</label>
+      <input type="number" id="fillWarn" value="80" step="5" min="0" max="100" style="width:90px" oninput="recalc()">
+    </div>
+    <p class="hint">Los datos y ajustes se guardan solo en este dispositivo. En iOS, exporta una copia periódicamente: el sistema puede borrar el almacenamiento local de apps poco usadas.</p>
+  </div>
+
+  <!-- ============ VISTA INFUSOR ============ -->
+  <div class="view on" id="view-infuser">
+
+  <!-- INFUSOR -->
+  <div class="card">
+    <h2><span class="n">1</span>Infusor</h2>
+    <div class="seg" id="infuserSeg"></div>
+    <div style="margin-top:14px">
+      <label>Volumen a cargar (ml)</label>
+      <input type="number" id="volume" step="1" min="1" oninput="recalc()">
+    </div>
+    <div class="hint" id="infuserInfo"></div>
+  </div>
+
+  <!-- AÑADIR FÁRMACO -->
+  <div class="card">
+    <h2><span class="n">2</span>Añadir fármaco</h2>
+    <div class="drug-add">
+      <div>
+        <label>Fármaco y presentación</label>
+        <select id="drugSel"></select>
+      </div>
+      <div class="row">
+        <div>
+          <label>Dosis diaria</label>
+          <input type="number" id="dailyDose" step="any" min="0" placeholder="ej. 60">
+        </div>
+        <div>
+          <label>Unidad</label>
+          <input type="text" id="doseUnit" value="mg" readonly style="background:var(--panel);color:var(--ink-faint)">
+        </div>
+      </div>
+      <button class="btn" onclick="addDrug()">Añadir al infusor</button>
+    </div>
+  </div>
+
+  <!-- NUEVA PRESENTACIÓN -->
+  <div class="card">
+    <details id="newPresBox">
+      <summary style="color:var(--ink-dim)">＋ Añadir presentación al catálogo</summary>
+      <div style="padding:12px 13px 4px">
+        <div class="drug-add">
+          <div>
+            <label>Nombre del fármaco</label>
+            <input type="text" id="np_name" placeholder="ej. Tramadol">
+          </div>
+          <div>
+            <label>Presentación (texto libre)</label>
+            <input type="text" id="np_brand" placeholder="ej. Normon 100 mg/2 ml">
+          </div>
+          <div class="row3">
+            <div>
+              <label>Concentración (mg/ml)</label>
+              <input type="number" id="np_conc" step="any" min="0" placeholder="ej. 50">
+            </div>
+            <div>
+              <label>mg por ampolla/vial</label>
+              <input type="number" id="np_mg" step="any" min="0" placeholder="ej. 100">
+            </div>
+          </div>
+          <div class="row3">
+            <div>
+              <label>ml por ampolla/vial</label>
+              <input type="number" id="np_ml" step="any" min="0" placeholder="ej. 2">
+            </div>
+            <div>
+              <label>Mezclable en infusor</label>
+              <select id="np_mix"><option value="1">Sí</option><option value="0">No</option></select>
+            </div>
+          </div>
+          <button class="btn" onclick="addPresentation()">Guardar presentación</button>
+          <p class="hint">Se guarda como <b>presentación local añadida por el usuario</b>, marcada con · y sujeta a validación. Concentración y mg/ml deben ser coherentes con la ampolla.</p>
+        </div>
+        <div id="customList" style="margin-top:10px"></div>
+      </div>
+    </details>
+  </div>
+
+  <!-- RESULTADOS -->
+  <div class="card">
+    <h2><span class="n">3</span>Preparación</h2>
+    <div id="drugList"></div>
+    <div id="alerts"></div>
+    <div class="totals" id="totals"></div>
+    <details id="calcBox" style="display:none">
+      <summary>Ver cálculo</summary>
+      <div class="calc" id="calc"></div>
+    </details>
+    <div class="check">
+      <input type="checkbox" id="validated">
+      <label for="validated" style="margin:0">He revisado el cálculo, las dosis, la vía, las presentaciones y las compatibilidades según el protocolo local.</label>
+    </div>
+    <div class="foot">
+      <button class="btn ghost" id="copyBtn" onclick="copysummary()">Copiar para HC</button>
+      <button class="btn ghost" onclick="clearAll()">Vaciar</button>
+    </div>
+  </div>
+
+  <p class="mini" style="text-align:center;margin-top:18px;color:var(--ink-faint)">
+    Infusores Nipro Surefuser+ · Ritmo nominal fijo · Duración = volumen ÷ ritmo
+  </p>
+  </div><!-- /view-infuser -->
+
+  <!-- ============ VISTA CONVERSOR OPIOIDE ============ -->
+  <div class="view" id="view-opioid">
+    <div class="card">
+      <h2><span class="n">1</span>Opioide de origen</h2>
+      <div>
+        <label>Fármaco actual</label>
+        <select id="opSrc" onchange="onOpSrcChange()"></select>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div>
+          <label id="opDoseLbl">Dosis diaria total</label>
+          <input type="number" id="opDose" step="any" min="0" placeholder="ej. 40" oninput="convert()">
+        </div>
+        <div>
+          <label>Unidad</label>
+          <input type="text" id="opUnit" readonly style="background:var(--panel);color:var(--ink-faint)">
+        </div>
+      </div>
+      <div class="factedit" id="opFactor"></div>
+    </div>
+
+    <div class="card">
+      <details id="newOpBox">
+        <summary style="color:var(--ink-dim)">＋ Añadir opioide al conversor</summary>
+        <div style="padding:12px 13px 4px">
+          <div class="drug-add">
+            <div>
+              <label>Nombre del opioide</label>
+              <input type="text" id="no_name" placeholder="ej. Petidina (meperidina)">
+            </div>
+            <div class="row3">
+              <div>
+                <label>Factor → morfina oral</label>
+                <input type="number" id="no_factor" step="any" min="0" placeholder="ej. 0.1">
+              </div>
+              <div>
+                <label>Unidad de dosis</label>
+                <select id="no_unit"><option value="mg/día">mg/día</option><option value="µg/h">µg/h</option></select>
+              </div>
+            </div>
+            <button class="btn" onclick="addOpioid()">Guardar opioide</button>
+            <p class="hint">Se guarda como <b>opioide local añadido por el usuario</b>, marcado con · y editable. El factor multiplica la dosis para obtener morfina oral equivalente (ej. tramadol = 0,1). Para opioides transdérmicos con equivalencia no lineal, usa un factor solo si conoces uno validado.</p>
+          </div>
+          <div id="customOpList" style="margin-top:10px"></div>
+        </div>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2><span class="n">2</span>Rotación y destino</h2>
+      <div class="settingsrow">
+        <label>Reducción por rotación opioide</label>
+        <select id="opReduce" style="width:130px" onchange="convert()">
+          <option value="0">0 %</option>
+          <option value="25" selected>25 %</option>
+          <option value="30">30 %</option>
+          <option value="50">50 %</option>
+        </select>
+      </div>
+      <div class="settingsrow">
+        <label>Ratio morfina oral → SC</label>
+        <select id="opRatio" style="width:130px" onchange="convert()">
+          <option value="2" selected>2 : 1</option>
+          <option value="3">3 : 1</option>
+        </select>
+      </div>
+      <div class="settingsrow">
+        <label>Regla de rescate</label>
+        <select id="opRescue" style="width:130px" onchange="convert()">
+          <option value="6" selected>1/6 del total</option>
+          <option value="10">1/10 del total</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="n">3</span>Resultado</h2>
+      <div id="opResult"></div>
+      <div id="opAlerts"></div>
+      <details id="opCalcBox" style="display:none">
+        <summary>Ver cálculo</summary>
+        <div class="calc" id="opCalc"></div>
+      </details>
+      <div class="check">
+        <input type="checkbox" id="opValidated">
+        <label for="opValidated" style="margin:0">He revisado el factor de conversión, la reducción por rotación y la dosis resultante según el protocolo local.</label>
+      </div>
+      <div class="foot">
+        <button class="btn ghost" onclick="copyOpioid()">Copiar para HC</button>
+      </div>
+    </div>
+
+    <p class="mini" style="text-align:center;margin-top:18px;color:var(--ink-faint)">
+      Factores editables · Fuente: consenso español (AECPAL-1aria 2022) · Fentanilo y buprenorfina TD por tabla de tramos
+    </p>
+  </div><!-- /view-opioid -->
+
+  <footer class="appfoot">
+    <div class="sig">HYPNOS</div>
+    <div class="by">Desarrollado por <b>Dr. Juan Pablo Gutierrez Rojas</b> — MFyC</div>
+    <div class="cr">© 2026 · Todos los derechos reservados</div>
+    <button class="foot-report" onclick="sendFeedback()">Enviar sugerencia o reportar un error</button>
+  </footer>
+  </div><!-- /wrap -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   MOTOR DE CÁLCULO — funciones puras, sin DOM.
+   Redondeo solo en presentación; cálculo interno completo.
+   ============================================================ */
+const Engine = {
+  round(n, d){ const f=Math.pow(10,d); return Math.round((n+Number.EPSILON)*f)/f; },
+  drugTotal(dailyDose, days){ return dailyDose * days; },
+  drugVolume(totalDose, concentration){ return totalDose / concentration; },
+  ampoulesExact(totalDose, mgPerAmp){ return totalDose / mgPerAmp; },
+  ampoulesToOpen(exact){ return Math.ceil(exact - 1e-9); },
+  wasteMl(toOpen, mlPerAmp, usedMl){ return (toOpen*mlPerAmp) - usedMl; },
+  realDurationH(volumeMl, rateMlH){ return volumeMl / rateMlH; },
+  // Devuelve un resultado por fármaco
+  computeDrug(d, days){
+    const totalDose = this.drugTotal(d.daily, days);
+    const volume = this.drugVolume(totalDose, d.conc);
+    const exact = this.ampoulesExact(totalDose, d.mgPerAmp);
+    const toOpen = this.ampoulesToOpen(exact);
+    const waste = this.wasteMl(toOpen, d.mlPerAmp, volume);
+    return { totalDose, volume, exact, toOpen, waste };
+  }
+};
+
+/* ============================================================
+   DATOS CLÍNICOS — presentaciones inyectables verificadas
+   contra material fotográfico del usuario (jul 2026).
+   unit: unidad de dosificación fija por fármaco.
+   ============================================================ */
+const DRUGS_BASE = [
+  { id:"morfina_10", name:"Morfina", brand:"B. Braun 10 mg/ml (amp. 1 ml = 10 mg)", unit:"mg",
+    conc:10, mgPerAmp:10, mlPerAmp:1, iv_only:false, mezclable:true },
+  { id:"morfina_20_amp", name:"Morfina", brand:"B. Braun 20 mg/ml (amp. 2 ml = 40 mg)", unit:"mg",
+    conc:20, mgPerAmp:40, mlPerAmp:2, iv_only:false, mezclable:true },
+  { id:"morfina_20_vial", name:"Morfina", brand:"B. Braun 20 mg/ml (vial 20 ml = 400 mg)", unit:"mg",
+    conc:20, mgPerAmp:400, mlPerAmp:20, iv_only:false, mezclable:true, env:"vial" },
+  { id:"midazolam_50_10", name:"Midazolam", brand:"Normon 50 mg/10 ml (5 mg/ml)", unit:"mg",
+    conc:5, mgPerAmp:50, mlPerAmp:10, iv_only:false, mezclable:true },
+  { id:"midazolam_5_5", name:"Midazolam", brand:"5 mg/5 ml (1 mg/ml)", unit:"mg",
+    conc:1, mgPerAmp:5, mlPerAmp:5, iv_only:false, mezclable:true },
+  { id:"midazolam_15_3", name:"Midazolam", brand:"15 mg/3 ml (5 mg/ml)", unit:"mg",
+    conc:5, mgPerAmp:15, mlPerAmp:3, iv_only:false, mezclable:true },
+  { id:"haloperidol_5", name:"Haloperidol", brand:"Esteve 5 mg/ml", unit:"mg",
+    conc:5, mgPerAmp:5, mlPerAmp:1, iv_only:false, mezclable:true },
+  { id:"levome_25", name:"Levomepromazina", brand:"Sinogan 25 mg/ml", unit:"mg",
+    conc:25, mgPerAmp:25, mlPerAmp:1, iv_only:false, mezclable:true, irritante:true },
+  { id:"metoclo_10_2", name:"Metoclopramida", brand:"Basi 10 mg/2 ml (5 mg/ml)", unit:"mg",
+    conc:5, mgPerAmp:10, mlPerAmp:2, iv_only:false, mezclable:true },
+  { id:"dexa_4", name:"Dexametasona", brand:"Kern/Fortecortin 4 mg/ml", unit:"mg",
+    conc:4, mgPerAmp:4, mlPerAmp:1, iv_only:false, mezclable:false, precipita:true },
+  { id:"butilesc_20", name:"Butilescopolamina", brand:"Kalceks 20 mg/ml", unit:"mg",
+    conc:20, mgPerAmp:20, mlPerAmp:1, iv_only:false, mezclable:true },
+  { id:"ketorolaco_30", name:"Ketorolaco", brand:"Normon 30 mg/ml", unit:"mg",
+    conc:30, mgPerAmp:30, mlPerAmp:1, iv_only:false, mezclable:true }
+];
+
+/* Catálogo activo = presentaciones verificadas + personalizadas del usuario.
+   Las personalizadas se marcan custom:true y se guardan en el backup. */
+function catalog(){ return DRUGS_BASE.concat(state.customDrugs||[]); }
+
+/* Infusores Nipro Surefuser+ 250 ml, ritmo nominal fijo.
+   [Fase 1 · C2] La dosificación usa la duración real (volumen ÷ ritmo).
+   Los campos days/txDays quedan solo como etiqueta comercial y NO se usan en el cálculo. */
+const INFUSERS = [
+  { id:"sfs2",  name:"5 días",  code:"SFS-2-25P",   rate:2,   volMax:252, days:5.25, txDays:5 },
+  { id:"sfs15", name:"7 días",  code:"SFS-1.5-25P", rate:1.5, volMax:252, days:7.0,  txDays:7 },
+  { id:"sfs5",  name:"2 días",  code:"SFS-5-25P",   rate:5,   volMax:252, days:2.1,  txDays:2 }
+];
+
+/* ============================================================
+   EQUIVALENCIAS OPIOIDES → MORFINA ORAL (mg/día)
+   Fuente base: consenso español / tabla AECPAL-1aria 2022.
+   Factores editables por el usuario (state.factors).
+   Fentanilo y buprenorfina TD: por tabla de tramos (no factor lineal).
+   ============================================================ */
+const OPIOIDS_BASE = [
+  { id:"morfina_vo", name:"Morfina oral", unit:"mg/día", type:"factor", factor:1, fixed:true },
+  { id:"morfina_sc", name:"Morfina subcutánea", unit:"mg/día", type:"factor", factor:2, note:"SC×2 = oral" },
+  { id:"oxicodona", name:"Oxicodona oral", unit:"mg/día", type:"factor", factor:1.5 },
+  { id:"oxicodona_naloxona", name:"Oxicodona/naloxona (Targin)", unit:"mg/día", type:"factor", factor:1.5,
+    note:"por componente oxicodona" },
+  { id:"tapentadol", name:"Tapentadol retard", unit:"mg/día", type:"factor", factor:0.4 },
+  { id:"tramadol", name:"Tramadol", unit:"mg/día", type:"factor", factor:0.1 },
+  { id:"codeina", name:"Codeína", unit:"mg/día", type:"factor", factor:0.083 },
+  { id:"hidromorfona", name:"Hidromorfona oral", unit:"mg/día", type:"factor", factor:5 },
+  { id:"buprenorfina_td", name:"Buprenorfina transdérmica", unit:"µg/h", type:"table",
+    table:[[35,60],[52.5,90],[70,120],[105,180],[140,240]] },
+  { id:"fentanilo_td", name:"Fentanilo transdérmico", unit:"µg/h", type:"table",
+    table:[[12,30],[25,60],[50,120],[75,180],[100,240],[125,300]],
+    note:"tramo conservador; rotación ~150:1" },
+  { id:"metadona", name:"Metadona", unit:"mg/día", type:"blocked",
+    note:"Conversión no lineal y peligrosa. Requiere manejo experto; no se calcula automáticamente." }
+];
+
+/* Catálogo activo de opioides = base + personalizados del usuario */
+function opioidCatalog(){ return OPIOIDS_BASE.concat(state.customOpioids||[]); }
+
+/* Conversión opioide origen → morfina oral diaria */
+function toOralMorphine(op, dose, factors){
+  if(op.type==="blocked") return { mo:null, detail:"bloqueado" };
+  if(op.type==="factor"){
+    const f = (factors&&factors[op.id]!=null)? factors[op.id] : op.factor;
+    return { mo: dose*f, f, detail:`${dose} × ${f}` };
+  }
+  if(op.type==="table"){
+    const t=op.table;
+    if(dose<=t[0][0]) return { mo: t[0][1]*dose/t[0][0], detail:`extrapolado bajo tramo`, approx:true };
+    for(let i=0;i<t.length-1;i++){
+      if(dose>=t[i][0] && dose<=t[i+1][0]){
+        const [x0,y0]=t[i], [x1,y1]=t[i+1];
+        const mo = y0 + (y1-y0)*(dose-x0)/(x1-x0);
+        return { mo, detail:`interpolado ${x0}-${x1} ${op.unit}` };
+      }
+    }
+    const last=t[t.length-1];
+    return { mo: last[1]*dose/last[0], detail:`extrapolado sobre tramo`, approx:true };
+  }
+}
+
+/* Reglas de compatibilidad verificadas (Manual ICO 4ª ed., cap.15) */
+const INCOMPAT = { // "mejor evitar" con levomepromazina
+  levome_25: ["haloperidol","ondansetron","metoclopramida"]
+};
+
+/* ============================================================
+   ESTADO + PERSISTENCIA
+   ============================================================ */
+const LS_KEY = "hypnos_v1";
+let state = {
+  infuserId: "sfs2",
+  volume: 252,
+  drugs: [], // {id, daily}
+  customDrugs: [], // presentaciones añadidas por el usuario
+  factors: {}, // overrides de factores de equivalencia opioide
+  customOpioids: [], // opioides de origen añadidos por el usuario
+  settings: { purge:0.5, ampWarn:40, fillWarn:80 }
+};
+
+function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){} }
+
+/* [Fase 1 · T2/T3] Saneado del estado (localStorage o copia importada).
+   Copia SOLO claves conocidas, valida tipos e ids y descarta el resto.
+   Sustituye al Object.assign ciego, que permitía inyectar claves,
+   sobrescribir factores clínicos o dejar el estado incoherente. */
+const DEFAULT_SETTINGS={purge:0.5,ampWarn:40,fillWarn:80};
+function num(v){ const n=parseFloat(v); return Number.isFinite(n)?n:null; }
+function sanitizeState(raw){
+  const out={ infuserId:"sfs2", volume:252, drugs:[], customDrugs:[],
+    factors:{}, customOpioids:[], settings:{...DEFAULT_SETTINGS} };
+  if(!raw || typeof raw!=="object") return out;
+
+  if(typeof raw.infuserId==="string" && INFUSERS.some(i=>i.id===raw.infuserId))
+    out.infuserId=raw.infuserId;
+  const v=num(raw.volume); if(v!=null && v>0) out.volume=v;
+
+  if(Array.isArray(raw.customDrugs)) out.customDrugs=raw.customDrugs.filter(d=>
+    d && typeof d==="object" && ID_RE.test(String(d.id)) &&
+    num(d.conc)>0 && num(d.mgPerAmp)>0 && num(d.mlPerAmp)>0
+  ).map(d=>({ id:String(d.id), name:String(d.name||"?"), brand:String(d.brand||""),
+    unit:"mg", conc:num(d.conc), mgPerAmp:num(d.mgPerAmp), mlPerAmp:num(d.mlPerAmp),
+    iv_only:false, mezclable:d.mezclable!==false, custom:true,
+    env:d.env==="vial"?"vial":undefined }));
+
+  if(Array.isArray(raw.customOpioids)) out.customOpioids=raw.customOpioids.filter(o=>
+    o && typeof o==="object" && ID_RE.test(String(o.id)) && num(o.factor)>0
+  ).map(o=>({ id:String(o.id), name:String(o.name||"?"),
+    unit:(o.unit==="µg/h"?"µg/h":"mg/día"), type:"factor", factor:num(o.factor), custom:true }));
+
+  const drugIds=new Set(DRUGS_BASE.concat(out.customDrugs).map(d=>d.id));
+  const opIds=new Set(OPIOIDS_BASE.concat(out.customOpioids).map(o=>o.id));
+
+  if(Array.isArray(raw.drugs)) out.drugs=raw.drugs.filter(x=>
+    x && drugIds.has(x.id) && num(x.daily)>0
+  ).map(x=>({ id:x.id, daily:num(x.daily) }));
+
+  if(raw.factors && typeof raw.factors==="object")
+    for(const k of Object.keys(raw.factors))
+      if(opIds.has(k) && num(raw.factors[k])>0) out.factors[k]=num(raw.factors[k]);
+
+  if(raw.settings && typeof raw.settings==="object"){
+    const p=num(raw.settings.purge), a=num(raw.settings.ampWarn), f=num(raw.settings.fillWarn);
+    if(p!=null && p>=0) out.settings.purge=p;
+    if(a!=null && a>0) out.settings.ampWarn=a;
+    if(f!=null && f>=0 && f<=100) out.settings.fillWarn=f;
+  }
+  return out;
+}
+function load(){
+  try{ state=sanitizeState(JSON.parse(localStorage.getItem(LS_KEY))); }
+  catch(e){ state=sanitizeState(null); }
+}
+
+/* ============================================================
+   UI
+   ============================================================ */
+function byId(x){ return document.getElementById(x); }
+/* [Fase 1 · T1] Escapado de texto de usuario antes de insertarlo con innerHTML.
+   Evita inyección de HTML desde nombres/presentaciones propios o importados. */
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,
+  c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+/* [Fase 1 · T2/T3] Patrón de id seguro para catálogos personalizados */
+const ID_RE=/^[A-Za-z0-9_]+$/;
+function drugById(id){ return catalog().find(d=>d.id===id); }
+function currentInfuser(){ return INFUSERS.find(i=>i.id===state.infuserId); }
+
+function renderInfuserSeg(){
+  byId("infuserSeg").innerHTML = INFUSERS.map(i=>`
+    <button class="${i.id===state.infuserId?'on':''}" onclick="pickInfuser('${i.id}')">
+      <span class="big">${i.name}</span>
+      <span class="sm">${i.rate} ml/h</span>
+      <span class="sm">${i.code}</span>
+    </button>`).join("");
+}
+function pickInfuser(id){
+  state.infuserId=id;
+  const inf=currentInfuser();
+  // al cambiar de infusor, proponer su volumen nominal completo
+  state.volume = inf.volMax;
+  byId("volume").value = inf.volMax;
+  renderInfuserSeg(); recalc();
+}
+
+function renderDrugSelect(){
+  byId("drugSel").innerHTML = catalog().map(d=>
+    `<option value="${esc(d.id)}">${esc(d.name)} — ${esc(d.brand)}${d.custom?" ·":""}</option>`).join("");
+  syncUnit();
+}
+function syncUnit(){
+  const d=drugById(byId("drugSel").value);
+  byId("doseUnit").value = d? d.unit : "mg";
+}
+
+function addPresentation(){
+  const name=byId("np_name").value.trim();
+  const brand=byId("np_brand").value.trim();
+  const conc=parseFloat(byId("np_conc").value);
+  const mg=parseFloat(byId("np_mg").value);
+  const ml=parseFloat(byId("np_ml").value);
+  const mix=byId("np_mix").value==="1";
+  if(!name || !brand){ toast("Falta nombre o presentación"); return; }
+  if(!(conc>0)||!(mg>0)||!(ml>0)){ toast("Concentración, mg y ml deben ser >0"); return; }
+  // coherencia: conc debe ≈ mg/ml
+  if(Math.abs(conc - mg/ml) > conc*0.02){
+    toast(`Incoherente: ${mg} mg ÷ ${ml} ml = ${Engine.round(mg/ml,2)} mg/ml, no ${conc}`);
+    return;
+  }
+  if(!state.customDrugs) state.customDrugs=[];
+  state.customDrugs.push({
+    id:"custom_"+Date.now(), name, brand, unit:"mg",
+    conc, mgPerAmp:mg, mlPerAmp:ml, iv_only:false, mezclable:mix, custom:true
+  });
+  byId("np_name").value=byId("np_brand").value=byId("np_conc").value=byId("np_mg").value=byId("np_ml").value="";
+  renderDrugSelect(); renderCustomList(); save();
+  toast("Presentación añadida");
+}
+function removePresentation(id){
+  state.customDrugs=(state.customDrugs||[]).filter(d=>d.id!==id);
+  // quitar del infusor las líneas que la usaban
+  state.drugs=state.drugs.filter(x=>x.id!==id);
+  renderDrugSelect(); renderCustomList(); recalc();
+  toast("Presentación eliminada");
+}
+function renderCustomList(){
+  const box=byId("customList"); if(!box) return;
+  const list=state.customDrugs||[];
+  box.innerHTML = list.length? list.map(d=>`
+    <div class="settingsrow">
+      <span style="font-size:13px">${esc(d.name)} — ${esc(d.brand)}
+        <span class="mini">(${esc(d.conc)} mg/ml)</span></span>
+      <button class="x" onclick="removePresentation('${esc(d.id)}')">×</button>
+    </div>`).join("") : `<div class="mini" style="padding:6px 0">Sin presentaciones propias todavía.</div>`;
+}
+
+function addDrug(){
+  const id = byId("drugSel").value;
+  const daily = parseFloat(byId("dailyDose").value);
+  if(!daily || daily<=0){ toast("Introduce una dosis diaria válida"); return; }
+  state.drugs.push({ id, daily });
+  byId("dailyDose").value="";
+  recalc();
+  toast("Fármaco añadido");
+}
+function removeDrug(idx){ state.drugs.splice(idx,1); recalc(); }
+
+function recalc(){
+  // sincronizar settings desde inputs
+  state.settings.purge = parseFloat(byId("purge").value)||0;
+  state.settings.ampWarn = parseFloat(byId("ampWarn").value)||40;
+  state.settings.fillWarn = parseFloat(byId("fillWarn").value)||80;
+  state.volume = parseFloat(byId("volume").value)||0;
+
+  const inf = currentInfuser();
+  const R = Engine.round.bind(Engine);
+
+  // [Fase 1 · C2] La dosis se calcula por la DURACIÓN REAL del dispositivo con el
+  // volumen cargado (volumen ÷ ritmo), no por un nº de días redondeado. Así lo que
+  // entrega el infusor cada 24 h coincide con la dosis diaria introducida.
+  const deviceH = Engine.realDurationH(state.volume, inf.rate);
+  const deviceDays = deviceH/24;
+  const days = deviceDays;                          // base de dosificación = duración real
+
+  byId("infuserInfo").innerHTML =
+    `${inf.code} · ${inf.rate} ml/h · máx ${inf.volMax} ml<br>` +
+    `Con ${R(state.volume,0)} ml a ${inf.rate} ml/h el dispositivo dura ` +
+    `<b style="color:var(--ink)">${R(deviceDays,2)} días</b> (${R(deviceH,0)} h). ` +
+    `La dosis se calcula para esa duración real.`;
+
+  // por fármaco
+  let rows="", calc="", sumVol=0, alerts=[];
+  // [Fase 1 · T3] filter(Boolean): una copia importada puede referenciar un
+  // fármaco personalizado ya borrado; sin esto, el render podía romperse.
+  const present = state.drugs.map(x=>drugById(x.id)).filter(Boolean);
+
+  state.drugs.forEach((x,idx)=>{
+    const d=drugById(x.id);
+    if(!d) return;                                  // [Fase 1 · T3] fármaco inexistente: se ignora
+    const r=Engine.computeDrug({daily:x.daily,conc:d.conc,mgPerAmp:d.mgPerAmp,mlPerAmp:d.mlPerAmp}, days);
+    sumVol += r.volume;                             // ml EXACTOS que se cargan
+    const envN = d.env==="vial"?"Viales":"Ampollas";
+    const envU = d.env==="vial"?"vial":"amp";
+    rows += `
+      <div class="drugline">
+        <div class="top">
+          <div><div class="nm">${esc(d.name)}</div><div class="pres">${esc(d.brand)}</div></div>
+          <button class="x" onclick="removeDrug(${idx})" aria-label="Quitar">×</button>
+        </div>
+        <div class="grid">
+          <div><span class="k">Diaria</span><span class="v">${R(x.daily,1)} ${d.unit}</span></div>
+          <div><span class="k">Total</span><span class="v">${R(r.totalDose,1)} ${d.unit}</span></div>
+          <div><span class="k">Cargar</span><span class="v">${R(r.volume,2)} ml</span></div>
+          <div><span class="k">Abrir ${envN.toLowerCase()}</span><span class="v">${r.toOpen}</span></div>
+        </div>
+      </div>`;
+    calc += `${d.name} (${d.brand})\n`+
+            `  ${R(x.daily,2)} ${d.unit}/día × ${R(days,2)} días = ${R(r.totalDose,2)} ${d.unit}\n`+
+            `  Cargar en el infusor: ${R(r.totalDose,2)} ÷ ${d.conc} mg/ml = ${R(r.volume,2)} ml\n`+
+            `  ${envN}: ${R(r.totalDose,2)} ÷ ${d.mgPerAmp} mg/${envU} = ${R(r.exact,2)} → abrir ${r.toOpen} ${envU}${r.toOpen>1?"s":""}\n`+
+            (r.waste>0.05?`  (Sobra ${R(r.waste,2)} ml de la última ${envU}, se desecha)\n`:``)+`\n`;
+
+    // alertas por fármaco
+    if(d.iv_only) alerts.push(["red",`${d.name}: uso exclusivo IV, no debe ir en infusor SC.`]);
+    if(d.mezclable===false && state.drugs.length>1)
+      alerts.push(["red",`${d.name}: no debe mezclarse con otros fármacos (fuente ICO).`]);
+    if(d.precipita) alerts.push(["amber",`${d.name}: precipita con facilidad; considerar administrarla en bolo SC independiente, fuera del infusor.`]);
+    if(d.irritante) alerts.push(["blue",`${d.name}: la vía SC puede ser irritante.`]);
+    if(r.toOpen > state.settings.ampWarn)
+      alerts.push(["amber",`${d.name}: ${r.toOpen} ${envU}s, número inusualmente alto. Verificar dosis y presentación.`]);
+  });
+
+  // compatibilidad: levomepromazina vs haloperidol/metoclopramida/ondansetrón
+  if(present.some(d=>d.id==="levome_25")){
+    if(present.some(d=>d.id==="haloperidol_5"))
+      alerts.push(["amber","Levomepromazina + haloperidol: mejor no mezclar (fuente ICO)."]);
+    if(present.some(d=>d.id==="metoclo_10_2"))
+      alerts.push(["amber","Levomepromazina + metoclopramida: mejor no mezclar (fuente ICO)."]);
+  }
+  if(state.drugs.length>1)
+    alerts.push(["gray","Compatibilidad completa no cargada en esta fase. Revisar manual/protocolo antes de preparar."]);
+
+  // volumen: diluyente = volumen a cargar − ml exactos de fármacos − purgado
+  const purge = state.settings.purge;
+  const diluent = state.volume - sumVol - purge;
+  const rateReal = inf.rate;                        // ritmo nominal del dispositivo
+  const fillPct = inf.volMax>0 ? (state.volume/inf.volMax*100) : 0;
+
+  if(sumVol > state.volume)
+    alerts.push(["red",`El volumen de fármacos (${R(sumVol,1)} ml) supera el volumen a cargar (${R(state.volume,0)} ml).`]);
+  else if(diluent < 0)
+    alerts.push(["red",`Volumen insuficiente: fármacos + purgado (${R(sumVol+purge,1)} ml) superan el total.`]);
+  if(state.volume > inf.volMax)
+    alerts.push(["red",`El volumen supera el máximo del infusor (${inf.volMax} ml).`]);
+  if(fillPct < state.settings.fillWarn && state.volume>0)
+    alerts.push(["amber",`Llenado parcial (${R(fillPct,0)}% del nominal). En elastoméricos reduce la precisión del flujo.`]);
+  if(state.drugs.length===0)
+    alerts.push(["gray","Añade al menos un fármaco para completar el cálculo."]);
+
+  // render lista
+  byId("drugList").innerHTML = state.drugs.length? rows :
+    `<div class="empty">Sin fármacos. Añade el primero arriba.</div>`;
+
+  // render alertas (rojo→ámbar→azul→gris)
+  const order={red:0,amber:1,blue:2,gray:3,ok:4};
+  alerts.sort((a,b)=>order[a[0]]-order[b[0]]);
+  byId("alerts").innerHTML = alerts.map(a=>
+    `<div class="alert a-${a[0]}"><span class="dot"></span><span>${esc(a[1])}</span></div>`).join("");
+
+  // [Fase 1] Bloqueo de seguridad: cualquier alerta ROJA (volumen imposible,
+  // supera el máximo, IV en infusor SC, fármaco no mezclable con otros…)
+  // impide copiar/exportar la pauta final, con casilla marcada o sin ella.
+  safetyBlock = alerts.some(a=>a[0]==="red");
+  const cbtn=byId("copyBtn");
+  if(cbtn){
+    cbtn.disabled=safetyBlock;
+    cbtn.style.opacity=safetyBlock?".5":"";
+    cbtn.title=safetyBlock?"Resuelve las alertas rojas antes de copiar la pauta":"";
+  }
+
+  // totales
+  byId("totals").innerHTML = state.drugs.length? `
+    <div class="totrow"><span>Volumen de fármacos</span><span class="v">${R(sumVol,2)} ml</span></div>
+    <div class="totrow"><span>Purgado de línea</span><span class="v">${R(purge,1)} ml</span></div>
+    <div class="totrow"><span>Diluyente (SF 0,9%) hasta ${R(state.volume,0)} ml</span><span class="v">${R(Math.max(diluent,0),2)} ml</span></div>
+    <div class="totrow big"><span>Ritmo (nominal fijo)</span><span class="v">${R(rateReal,1)} ml/h</span></div>` : "";
+
+  byId("calcBox").style.display = state.drugs.length? "block":"none";
+  byId("calc").textContent = calc.trim();
+
+  save();
+}
+
+/* ============================================================
+   COPIAR / EXPORTAR
+   ============================================================ */
+function copysummary_build(){
+  const inf=currentInfuser(); const R=Engine.round.bind(Engine);
+  const deviceH=Engine.realDurationH(state.volume,inf.rate);
+  const days=deviceH/24;                             // [Fase 1 · C2] duración real del dispositivo
+  let sumVol=0, lines=[];
+  state.drugs.forEach(x=>{
+    const d=drugById(x.id);
+    if(!d) return;                                   // [Fase 1 · T3]
+    const r=Engine.computeDrug({daily:x.daily,conc:d.conc,mgPerAmp:d.mgPerAmp,mlPerAmp:d.mlPerAmp},days);
+    sumVol+=r.volume;
+    const envU=d.env==="vial"?"vial(es)":"amp";
+    lines.push(`${d.name} ${R(x.daily,1)} ${d.unit}/día × ${R(days,2)} d = ${R(r.totalDose,1)} ${d.unit}: cargar ${R(r.volume,2)} ml (abrir ${r.toOpen} ${envU}) — ${d.brand}`);
+  });
+  const diluent=Math.max(state.volume-sumVol-state.settings.purge,0);
+  const out=[
+    `INFUSOR SC ${inf.code} — cargar ${R(state.volume,0)} ml`,
+    `Dispositivo: ${inf.rate} ml/h → dura ~${R(days,2)} días (${R(deviceH,0)} h). Dosis calculada para esa duración.`,
+    ...lines,
+    `Completar con SF 0,9%: ${R(diluent,2)} ml (purgado ${R(state.settings.purge,1)} ml)`,
+    `Ritmo: ${R(inf.rate,1)} ml/h (nominal fijo)`,
+    `Compatibilidades: revisar según protocolo local.`,
+    `Cálculo pendiente de validación médica final.`
+  ];
+  return out.join("\n");
+}
+function copyText(t){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(()=>toast("Copiado para HC")).catch(()=>fallbackCopy(t));
+  } else fallbackCopy(t);
+}
+function fallbackCopy(t){
+  const ta=document.createElement("textarea"); ta.value=t; document.body.appendChild(ta);
+  ta.select(); try{document.execCommand("copy");toast("Copiado para HC");}catch(e){toast("No se pudo copiar");}
+  document.body.removeChild(ta);
+}
+function copysummary(){
+  if(state.drugs.length===0){ toast("No hay nada que copiar"); return; }
+  if(safetyBlock){ toast("Hay alertas rojas sin resolver: no se puede copiar la pauta"); return; }
+  if(!byId("validated").checked){ toast("Marca la casilla de validación antes de copiar"); return; }
+  copyText(copysummary_build());
+}
+
+function exportJSON(){
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob); const a=document.createElement("a");
+  const d=new Date().toISOString().slice(0,10);
+  a.href=url; a.download=`hypnos_backup_${d}.json`; a.click();
+  URL.revokeObjectURL(url); toast("Copia exportada");
+}
+function importJSON(ev){
+  const f=ev.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{ state=sanitizeState(JSON.parse(r.result));
+    hydrate(); toast("Copia importada"); }catch(e){ toast("Archivo no válido"); } };
+  r.readAsText(f); ev.target.value="";
+}
+
+function clearAll(){ state.drugs=[]; recalc(); toast("Infusor vaciado"); }
+
+function toggleSettings(){
+  const s=byId("settings"); s.style.display = s.style.display==="none"?"block":"none";
+}
+
+/* Correo del desarrollador para sugerencias/errores */
+const DEV_EMAIL = "jgutierrezr@sescam.jccm.es";
+function sendFeedback(){
+  const asunto = encodeURIComponent("HYPNOS — Sugerencia / reporte de error");
+  const cuerpo = encodeURIComponent(
+    "Hola Dr. Gutierrez,\n\n"+
+    "Quiero reportar lo siguiente sobre HYPNOS:\n\n"+
+    "— Qué ocurre / qué sugiero:\n\n\n"+
+    "— En qué pantalla (Infusor / Conversor):\n\n"+
+    "— Fármaco o dato implicado (si aplica):\n\n\n"+
+    "-------------------------\n"+
+    "Enviado desde HYPNOS v1.1"
+  );
+  window.location.href = `mailto:${DEV_EMAIL}?subject=${asunto}&body=${cuerpo}`;
+}
+
+let toastT, safetyBlock=false;
+function toast(msg){
+  const t=byId("toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("show"),1900);
+}
+
+/* ============================================================
+   NAVEGACIÓN DE VISTAS
+   ============================================================ */
+function showView(v){
+  document.querySelectorAll(".view").forEach(el=>el.classList.remove("on"));
+  document.querySelectorAll(".tabs button").forEach(el=>el.classList.remove("on"));
+  byId("view-"+v).classList.add("on");
+  byId("tab-"+v).classList.add("on");
+}
+
+/* ============================================================
+   CONVERSOR OPIOIDE — UI
+   ============================================================ */
+function opById(id){ return opioidCatalog().find(o=>o.id===id); }
+
+function renderOpSelect(){
+  const prev = byId("opSrc").value;
+  byId("opSrc").innerHTML = opioidCatalog().filter(o=>!o.fixed || o.id==="morfina_vo")
+    .map(o=>`<option value="${esc(o.id)}">${esc(o.name)}${o.custom?" ·":""}</option>`).join("");
+  if(prev && opById(prev)) byId("opSrc").value=prev;
+  onOpSrcChange();
+}
+function onOpSrcChange(){
+  const op=opById(byId("opSrc").value);
+  if(!op) return;                                   // [Fase 1 · T3] selección inválida: no romper
+  byId("opUnit").value=op.unit;
+  byId("opDoseLbl").textContent = op.unit==="µg/h" ? "Dosis del parche" : "Dosis diaria total";
+  // editor de factor (solo para tipo factor no fijo)
+  const fe=byId("opFactor");
+  if(op.type==="factor" && !op.fixed){
+    const cur=(state.factors&&state.factors[op.id]!=null)?state.factors[op.id]:op.factor;
+    fe.innerHTML=`Factor → morfina oral: <input type="number" step="any" value="${cur}" `+
+      `onchange="setFactor('${op.id}',this.value)"> `+
+      `<span onclick="resetFactor('${op.id}')" style="cursor:pointer;text-decoration:underline">restaurar</span>`+
+      (op.note?` · <i>${op.note}</i>`:``);
+  } else if(op.type==="table"){
+    fe.innerHTML=`Conversión por tabla de tramos (${op.unit}). ${op.note||""}`;
+  } else if(op.type==="blocked"){
+    fe.innerHTML=`<span style="color:var(--amber)">${op.note}</span>`;
+  } else fe.innerHTML=op.note||"";
+  convert();
+}
+function setFactor(id,val){
+  const v=parseFloat(val); if(!(v>0)){ toast("Factor no válido"); return; }
+  if(!state.factors) state.factors={}; state.factors[id]=v; save(); convert();
+  toast("Factor actualizado");
+}
+function resetFactor(id){
+  if(state.factors) delete state.factors[id]; save(); onOpSrcChange();
+  toast("Factor restaurado");
+}
+
+function addOpioid(){
+  const name=byId("no_name").value.trim();
+  const factor=parseFloat(byId("no_factor").value);
+  const unit=byId("no_unit").value;
+  if(!name){ toast("Falta el nombre"); return; }
+  if(!(factor>0)){ toast("El factor debe ser >0"); return; }
+  if(!state.customOpioids) state.customOpioids=[];
+  state.customOpioids.push({ id:"cop_"+Date.now(), name, unit, type:"factor", factor, custom:true });
+  byId("no_name").value=byId("no_factor").value="";
+  renderOpSelect(); renderCustomOpList(); save();
+  toast("Opioide añadido");
+}
+function removeOpioid(id){
+  state.customOpioids=(state.customOpioids||[]).filter(o=>o.id!==id);
+  renderOpSelect(); renderCustomOpList(); save();
+  toast("Opioide eliminado");
+}
+function renderCustomOpList(){
+  const box=byId("customOpList"); if(!box) return;
+  const list=state.customOpioids||[];
+  box.innerHTML=list.length? list.map(o=>`
+    <div class="settingsrow">
+      <span style="font-size:13px">${esc(o.name)}
+        <span class="mini">(×${esc(o.factor)} · ${esc(o.unit)})</span></span>
+      <button class="x" onclick="removeOpioid('${esc(o.id)}')">×</button>
+    </div>`).join("") : `<div class="mini" style="padding:6px 0">Sin opioides propios todavía.</div>`;
+}
+
+function convert(){
+  const op=opById(byId("opSrc").value);
+  const dose=parseFloat(byId("opDose").value);
+  const R=Engine.round.bind(Engine);
+  const res=byId("opResult"), al=byId("opAlerts"), cb=byId("opCalcBox"), cc=byId("opCalc");
+  let alerts=[];
+
+  if(!op){ res.innerHTML=""; al.innerHTML=""; cb.style.display="none"; return; } // [Fase 1 · T3]
+  if(op.type==="blocked"){
+    res.innerHTML="";
+    al.innerHTML=`<div class="alert a-red"><span class="dot"></span><span>${op.note}</span></div>`;
+    cb.style.display="none"; return;
+  }
+  if(!dose||dose<=0){
+    res.innerHTML=`<div class="empty">Introduce la dosis de origen.</div>`;
+    al.innerHTML=""; cb.style.display="none"; return;
+  }
+
+  const conv=toOralMorphine(op, dose, state.factors);
+  const moRaw=conv.mo;
+  const reduce=parseFloat(byId("opReduce").value)/100;
+  const ratio=parseFloat(byId("opRatio").value);
+  const rescueDiv=parseFloat(byId("opRescue").value);
+
+  const moReduced = moRaw*(1-reduce);       // morfina oral tras rotación
+  const scDaily = moReduced/ratio;           // morfina SC diaria
+  const ivDaily = scDaily;                   // aprox SC≈IV en paliativos (÷1); nota abajo
+  const rescueOral = moReduced/rescueDiv;    // rescate en morfina oral
+  const rescueSC = scDaily/rescueDiv;        // rescate SC
+
+  res.innerHTML=`
+    <div class="bigresult">
+      <div class="lbl">Morfina oral equivalente / día</div>
+      <div class="val">${R(moReduced,1)} <small>mg/día</small></div>
+    </div>
+    <div class="subres">
+      <div class="box"><div class="k">Morfina SC / día</div><div class="v">${R(scDaily,1)} mg</div></div>
+      <div class="box"><div class="k">Rescate SC</div><div class="v">${R(rescueSC,1)} mg</div></div>
+      <div class="box"><div class="k">Rescate oral</div><div class="v">${R(rescueOral,1)} mg</div></div>
+      <div class="box"><div class="k">Para infusor SC 24h</div><div class="v">${R(scDaily,1)} mg</div></div>
+    </div>`;
+
+  // alertas
+  if(reduce===0)
+    alerts.push(["amber","Rotación sin reducción de dosis. Al cambiar de opioide se recomienda reducir 25-50% por tolerancia cruzada incompleta."]);
+  if(conv.approx)
+    alerts.push(["amber","Dosis fuera de los tramos tabulados: valor extrapolado, mayor incertidumbre."]);
+  if(moReduced>=90)
+    alerts.push(["amber",`Dosis alta (${R(moReduced,0)} mg morfina oral/día ≥ 90 DEM). Reevaluar beneficio-riesgo.`]);
+  if(op.id==="fentanilo_td")
+    alerts.push(["blue","Fentanilo TD: al retirar el parche persiste liberación ~17 h. Iniciar perfusión con dosis reducida y cubrir con rescates las primeras 12-24 h."]);
+  if(op.id==="oxicodona_naloxona")
+    alerts.push(["blue","Introduce solo el componente oxicodona (ej. Targin 20/10 → 20 mg oxicodona)."]);
+  alerts.push(["gray","Factores orientativos y editables. Verificar con protocolo local antes de prescribir. SC≈IV asumido 1:1 en paliativos."]);
+
+  const order={red:0,amber:1,blue:2,gray:3};
+  alerts.sort((a,b)=>order[a[0]]-order[b[0]]);
+  al.innerHTML=alerts.map(a=>`<div class="alert a-${a[0]}"><span class="dot"></span><span>${a[1]}</span></div>`).join("");
+
+  cb.style.display="block";
+  cc.textContent=
+`Origen: ${op.name} ${dose} ${op.unit}
+Morfina oral bruta: ${conv.detail} = ${R(moRaw,2)} mg/día
+Reducción rotación ${R(reduce*100,0)}%: ${R(moRaw,2)} × ${R(1-reduce,2)} = ${R(moReduced,2)} mg/día
+Morfina SC: ${R(moReduced,2)} ÷ ${ratio} = ${R(scDaily,2)} mg/día
+Rescate (1/${rescueDiv}): oral ${R(rescueOral,2)} mg · SC ${R(rescueSC,2)} mg`;
+
+  save();
+}
+
+function copyOpioid(){
+  if(!byId("opValidated").checked){ toast("Marca la casilla de validación antes de copiar"); return; }
+  const op=opById(byId("opSrc").value);
+  const dose=parseFloat(byId("opDose").value);
+  if(!dose||dose<=0||op.type==="blocked"){ toast("Nada que copiar"); return; }
+  const R=Engine.round.bind(Engine);
+  const conv=toOralMorphine(op,dose,state.factors);
+  const reduce=parseFloat(byId("opReduce").value)/100;
+  const ratio=parseFloat(byId("opRatio").value);
+  const rescueDiv=parseFloat(byId("opRescue").value);
+  const moReduced=conv.mo*(1-reduce), scDaily=moReduced/ratio;
+  const txt=
+`CONVERSIÓN OPIOIDE
+Origen: ${op.name} ${dose} ${op.unit}
+Reducción por rotación: ${R(reduce*100,0)}%
+Morfina oral equivalente: ${R(moReduced,1)} mg/día
+Morfina SC equivalente: ${R(scDaily,1)} mg/día (ratio ${ratio}:1)
+Rescate SC: ${R(scDaily/rescueDiv,1)} mg (1/${rescueDiv})
+Factores orientativos (consenso español). Pendiente de validación médica.`;
+  copyText(txt);
+}
+
+
+function hydrate(){
+  byId("purge").value=state.settings.purge;
+  byId("ampWarn").value=state.settings.ampWarn;
+  byId("fillWarn").value=state.settings.fillWarn;
+  byId("volume").value=state.volume;
+  renderInfuserSeg();
+  renderDrugSelect();
+  renderCustomList();
+  renderOpSelect();
+  renderCustomOpList();
+  recalc();
+}
+byId("drugSel");
+document.addEventListener("change",e=>{ if(e.target.id==="drugSel") syncUnit(); });
+load(); hydrate();
+
+/* self-check de casos dorados en consola (no bloquea UI) */
+(function goldenCases(){
+  const R=(n,d)=>Engine.round(n,d);
+  const m=Engine.computeDrug({daily:60,conc:10,mgPerAmp:10,mlPerAmp:1},5);
+  console.assert(R(m.totalDose,2)===300 && R(m.volume,2)===30 && m.toOpen===30,"Golden morfina falla");
+  const mi=Engine.computeDrug({daily:30,conc:5,mgPerAmp:50,mlPerAmp:10},5);
+  console.assert(R(mi.totalDose,2)===150 && R(mi.volume,2)===30 && mi.toOpen===3,"Golden midazolam falla");
+  console.assert(R(Engine.realDurationH(250,2)/24,2)===5.21,"Golden duración 250/2 falla");
+  console.assert(R(Engine.realDurationH(200,2)/24,2)===4.17,"Golden duración 200/2 falla");
+  console.log("HYPNOS · casos dorados ejecutados");
+})();
+</script>
+</body>
+</html>
