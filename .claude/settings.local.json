@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/jpccm/**)",
+      "Bash(cmd.exe /c \"dir /a \\\\\"C:\\\\Users\\\\jpccm\\\\Desktop\\\\APP HYPNOS\\\\\"\")",
+      "WebSearch",
+      "WebFetch(domain:www.sanidad.gob.es)",
+      "Bash(pdftotext -v)",
+      "Bash(PDF=\"/c/Users/jpccm/.claude/projects/C--Users-jpccm-Desktop-APP-HYPNOS/27db9824-0a17-4343-a1e9-9b9be1c9b39d/tool-results/webfetch-1785189347883-769pey.pdf\" *)",
+      "Bash(pdftotext -h)",
+      "Bash(pdftotext -f 37 -l 37 -table -enc UTF-8 /c/Users/jpccm/.claude/projects/C--Users-jpccm-Desktop-APP-HYPNOS/27db9824-0a17-4343-a1e9-9b9be1c9b39d/tool-results/webfetch-1785189347883-769pey.pdf -)",
+      "Bash(awk '{printf \"%3d: %s\\\\n\", NR, $0}')",
+      "Bash(python3 -c ' *)",
+      "Bash(f=/tmp/p37.txt *)",
+      "WebFetch(domain:ingesa.sanidad.gob.es)",
+      "Bash(grep -n -i '90 mg\\\\|dosis alta\\\\|umbral\\\\|100 mg equivalente' __TRACKED_VAR__/opioides_msanidad.txt)",
+      "Bash(node -e ' *)",
+      "Bash(node --check /tmp/hypnos_script.js)",
+      "PowerShell(node --version 2>&1)"
+    ]
+  }
+}
