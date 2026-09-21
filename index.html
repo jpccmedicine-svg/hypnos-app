@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>HYPNOS v2.0 · Asistente clínico de Paliativos</title>
+  <meta name="description" content="Asistente clínico Local-First para Cuidados Paliativos y Atención al Final de la Vida.">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Saltar al contenido</a>
+
+  <header class="topbar">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="22" fill="none" stroke="currentColor" stroke-width="3"/><path d="M30 12a14 14 0 1 0 6 20A11 11 0 0 1 30 12z" fill="currentColor"/></svg>
+      <div>
+        <h1>HYPNOS <small>v2.0</small></h1>
+        <p class="tagline">Paliativos · Local-First</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button id="semaforo-badge" class="semaforo verde" type="button" aria-expanded="false" aria-controls="semaforo-panel" aria-live="polite">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="semaforo-label" id="semaforo-label">Sin alertas automáticas</span>
+      </button>
+      <button id="theme-toggle" class="icon-btn" type="button" aria-label="Cambiar a modo oscuro" title="Modo oscuro / claro">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path id="theme-icon" fill="currentColor" d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <section id="semaforo-panel" class="semaforo-panel" hidden aria-label="Detalle del semáforo clínico de seguridad"></section>
+
+  <nav class="tabs" role="tablist" aria-label="Módulos de HYPNOS">
+    <button role="tab" id="tab-rapido" aria-controls="panel-rapido" aria-selected="true" data-tab="rapido"><span class="ico" aria-hidden="true">💉</span><span>Infusor</span></button>
+    <button role="tab" id="tab-guiado" aria-controls="panel-guiado" aria-selected="false" tabindex="-1" data-tab="guiado"><span class="ico" aria-hidden="true">🧭</span><span>Guiado</span></button>
+    <button role="tab" id="tab-opioides" aria-controls="panel-opioides" aria-selected="false" tabindex="-1" data-tab="opioides"><span class="ico" aria-hidden="true">🔄</span><span>Opioides</span></button>
+    <button role="tab" id="tab-nota" aria-controls="panel-nota" aria-selected="false" tabindex="-1" data-tab="nota"><span class="ico" aria-hidden="true">📝</span><span>Nota</span></button>
+    <button role="tab" id="tab-familias" aria-controls="panel-familias" aria-selected="false" tabindex="-1" data-tab="familias"><span class="ico" aria-hidden="true">🤝</span><span>Familias</span></button>
+  </nav>
+
+  <main id="main">
+    <!-- TAB 1 · MODO RÁPIDO / INFUSOR -->
+    <section id="panel-rapido" role="tabpanel" aria-labelledby="tab-rapido" class="panel">
+      <h2>Modo Rápido · Infusor elastomérico</h2>
+      <p class="lead">Dosis diaria SC → preparación exacta sobre días reales de duración.</p>
+
+      <div class="card">
+        <label for="infusor-select">Dispositivo</label>
+        <select id="infusor-select"></select>
+        <div id="custom-fields" class="grid3" hidden>
+          <div><label for="c-llenado">Llenado (ml)</label><input id="c-llenado" type="number" inputmode="decimal" min="1" step="any" value="100"></div>
+          <div><label for="c-real">Vol. real (ml)</label><input id="c-real" type="number" inputmode="decimal" min="1" step="any" placeholder="= llenado"></div>
+          <div><label for="c-ritmo">Ritmo (ml/h)</label><input id="c-ritmo" type="number" inputmode="decimal" min="0.1" step="any" value="2"></div>
+        </div>
+        <div id="infusor-resumen" class="chips" aria-live="polite"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h3>Fármacos</h3>
+          <button id="add-farmaco" class="btn ghost" type="button">＋ Añadir</button>
+        </div>
+        <div id="farmacos-list"></div>
+      </div>
+
+      <div id="resultado" aria-live="polite"></div>
+    </section>
+
+    <!-- TAB 2 · MODO GUIADO SECPAL -->
+    <section id="panel-guiado" role="tabpanel" aria-labelledby="tab-guiado" class="panel" hidden>
+      <h2>Modo Guiado SECPAL</h2>
+      <p class="lead">5 preguntas para decidir a las 3 AM. Orientativo; requiere criterio clínico.</p>
+      <div id="guiado"></div>
+    </section>
+
+    <!-- TAB 3 · CONVERSOR DE OPIOIDES -->
+    <section id="panel-opioides" role="tabpanel" aria-labelledby="tab-opioides" class="panel" hidden>
+      <h2>Conversor Oficial de Opioides</h2>
+      <p class="lead">Equianalgesia según Anexo 6, Tabla 1 · Plan de Optimización, Ministerio de Sanidad 2024.</p>
+      <div class="card">
+        <label for="opioide-select">Opioide actual</label>
+        <select id="opioide-select"></select>
+        <div class="grid2">
+          <div>
+            <label for="opioide-dosis" id="opioide-dosis-label">Dosis</label>
+            <input id="opioide-dosis" type="number" inputmode="decimal" min="0" step="any">
+            <select id="opioide-parche" hidden aria-label="Dosis de parche"></select>
+          </div>
+          <div>
+            <label for="opioide-reduccion">Reducción por tolerancia cruzada</label>
+            <select id="opioide-reduccion">
+              <option value="0">Ninguna (0 %)</option>
+              <option value="0.25">25 %</option>
+              <option value="0.33">33 %</option>
+              <option value="0.5">50 %</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div id="opioide-resultado" aria-live="polite"></div>
+    </section>
+
+    <!-- TAB 4 · NOTA CLÍNICA -->
+    <section id="panel-nota" role="tabpanel" aria-labelledby="tab-nota" class="panel" hidden>
+      <h2>Nota clínica para Historia</h2>
+      <p class="lead">Texto estructurado para pegar en Mambrino XXI (Hospital) o Turriano (Primaria / ESAD) del SESCAM. No incluya nombre completo del paciente.</p>
+      <div class="card">
+        <div class="grid2">
+          <div><label for="n-sistema">Sistema</label>
+            <select id="n-sistema"><option value="mambrino">Mambrino XXI (Hospital)</option><option value="turriano">Turriano (Primaria / ESAD)</option></select></div>
+          <div><label for="n-ambito">Ámbito</label>
+            <select id="n-ambito"><option>Urgencias</option><option>MFyC / Atención Primaria</option><option>ESAD / Domicilio</option><option>Planta hospitalaria</option></select></div>
+        </div>
+        <label for="n-paciente">Identificador (NHC / iniciales)</label>
+        <input id="n-paciente" type="text" autocomplete="off" placeholder="p. ej. NHC 123456">
+        <label for="n-contexto">Situación</label>
+        <select id="n-contexto"><option value="agonia">Situación de agonía</option><option value="refractario">Síntomas refractarios</option><option value="control">Control sintomático en enfermedad avanzada</option></select>
+        <label for="n-sintomas">Síntomas</label>
+        <textarea id="n-sintomas" rows="2" placeholder="Dolor, disnea, estertores…"></textarea>
+        <label for="n-previo">Tratamiento previo</label>
+        <textarea id="n-previo" rows="2"></textarea>
+        <label for="n-obs">Observaciones</label>
+        <textarea id="n-obs" rows="2"></textarea>
+        <label class="check"><input id="n-familia" type="checkbox"> Información a familia entregada</label>
+        <label class="check"><input id="n-sedacion" type="checkbox"> Sedación paliativa: indicación y consentimiento documentados</label>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Vista previa</h3><span id="nota-estado" class="muted"></span></div>
+        <textarea id="nota-texto" rows="16" class="mono" aria-label="Nota clínica generada"></textarea>
+        <div class="btn-row">
+          <button id="nota-copiar" class="btn primary" type="button">📋 Copiar al portapapeles</button>
+          <button id="nota-regenerar" class="btn ghost" type="button">↻ Regenerar</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5 · FAMILIAS -->
+    <section id="panel-familias" role="tabpanel" aria-labelledby="tab-familias" class="panel" hidden>
+      <h2>Guía y apoyo a familias</h2>
+      <p class="lead">Respuestas claras y cálidas a los miedos más frecuentes. Léalas o compártalas con la familia.</p>
+      <div id="familias"></div>
+      <h3 class="section-title">Guía de rescate subcutáneo</h3>
+      <div class="card"><ol id="rescate-guia" class="steps"></ol>
+        <p class="muted">Solo con pauta escrita por el equipo médico.</p></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p><strong>Herramienta de apoyo a la decisión clínica.</strong> No sustituye el juicio profesional. Verifique dosis y compatibilidades antes de prescribir. Todos los datos se procesan en este dispositivo y funcionan sin conexión.</p>
+    <p class="muted">HYPNOS v2.0 · Sesión clínica HU Cuenca</p>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="engine.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
