@@ -15,6 +15,7 @@
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   const state = {
+    modo: 'sencillo',
     infusor: 'sfs2_252',
     rows: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }],
     ultimo: null, // último resultado de infusor
@@ -62,6 +63,25 @@
     if (!t) t = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     setTheme(t);
     $('#theme-toggle').addEventListener('click', () => setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'));
+  }
+
+  /* ───────────── Modo Sencillo / Experto ───────────── */
+  function setModo(modo) {
+    state.modo = modo;
+    try { localStorage.setItem('hypnos-modo', modo); } catch (e) { /* modo privado */ }
+    document.body.setAttribute('data-modo', modo);
+    const bS = $('#btn-modo-sencillo'), bE = $('#btn-modo-experto');
+    if (bS) { bS.classList.toggle('active', modo === 'sencillo'); bS.setAttribute('aria-checked', String(modo === 'sencillo')); }
+    if (bE) { bE.classList.toggle('active', modo === 'experto'); bE.setAttribute('aria-checked', String(modo === 'experto')); }
+    renderRows();
+  }
+  function initModo() {
+    let m = null;
+    try { m = localStorage.getItem('hypnos-modo'); } catch (e) { /* noop */ }
+    if (m !== 'sencillo' && m !== 'experto') m = 'sencillo';
+    setModo(m);
+    $('#btn-modo-sencillo').addEventListener('click', () => setModo('sencillo'));
+    $('#btn-modo-experto').addEventListener('click', () => setModo('experto'));
   }
 
   /* ───────────── Pestañas ───────────── */
@@ -133,7 +153,7 @@
     $('#farmacos-list').innerHTML = state.rows.map((r, i) => `
       <div class="fila" data-i="${i}">
         <div><label>Fármaco</label><select data-f="farmaco">${opcionesFarmaco(r.farmaco)}</select></div>
-        <div><label>Presentación</label><select data-f="presentacion">${opcionesPres(r.farmaco, r.presentacion)}</select></div>
+        <div class="fila-pres"><label>Presentación</label><select data-f="presentacion">${opcionesPres(r.farmaco, r.presentacion)}</select></div>
         <div><label>Dosis diaria (mg/día)</label><input data-f="dosisDiaria" type="number" inputmode="decimal" min="0" step="any" value="${esc(r.dosisDiaria)}"></div>
         <button class="btn danger icon" type="button" data-act="del" aria-label="Quitar ${esc(H.FARMACOS[r.farmaco].nombre)}">✕</button>
       </div>`).join('') || '<p class="muted">Añada al menos un fármaco.</p>';
@@ -141,6 +161,36 @@
   function leerInfusor() {
     if (state.infusor !== 'custom') return state.infusor;
     return { id: 'custom', llenado: $('#c-llenado').value, volumenReal: $('#c-real').value, ritmo: $('#c-ritmo').value };
+  }
+  /* ───────────── Duración del infusor ───────────── */
+  function syncDurBtnsFromInfusor() {
+    let horas = null;
+    try { horas = H.calcularDuracion(leerInfusor()).horas; } catch (e) { /* noop */ }
+    let dias = null;
+    if (horas != null) {
+      if (Math.abs(horas - 24) < 0.5) dias = 1;
+      else if (horas >= 124.5 && horas <= 126.5) dias = 5;
+      else if (Math.abs(horas - 168) < 0.5) dias = 7;
+    }
+    $$('.dur-btn').forEach((b) => {
+      const on = dias !== null && Number(b.dataset.dias) === dias;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-checked', String(on));
+    });
+  }
+  function setDuracion(dias) {
+    const map = { 1: 'dia_48', 5: 'sfs2_252', 7: 'dia_7' };
+    const id = map[dias];
+    if (!id) return;
+    state.infusor = id;
+    $('#infusor-select').value = id;
+    $('#custom-fields').hidden = id !== 'custom';
+    $$('.dur-btn').forEach((b) => {
+      const on = Number(b.dataset.dias) === dias;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-checked', String(on));
+    });
+    recalcular();
   }
   function recalcular() {
     const cont = $('#resultado');
@@ -169,29 +219,37 @@
         <td>${fmt(f.totalMg)} mg</td><td><strong>${fmt(f.volumenAspirar)} ml</strong></td>
         <td>${f.ampollas}</td><td>${fmt(f.volumenSobrante)} ml</td></tr>`).join('');
     const rescates = r.farmacos.filter((f) => f.rescate).map((f) => `<li><strong>${esc(f.nombre)}:</strong> ${esc(f.rescate.texto)}</li>`).join('');
+    const nivel = r.semaforo.nivel;
+    const estado = nivel === 'verde'
+      ? `<p class="estado-discreto verde">ℹ️ ${esc(r.semaforo.resumen)}</p>`
+      : `<div class="card estado ${nivel}"><strong>${nivel === 'rojo' ? '⛔' : '⚠️'} ${esc(r.semaforo.resumen)}</strong>
+          ${r.semaforo.alertas.map((a) => `<p>${esc(a.mensaje)}</p>`).join('')}
+        </div>`;
     return `
       <div class="card">
         <h3>Preparación</h3>
         <div class="tabla-wrap"><table class="tabla">
           <thead><tr><th>Fármaco</th><th>Total</th><th>Aspirar</th><th>Amp.</th><th>Desechar</th></tr></thead>
           <tbody>${filas}
-            <tr class="suero"><th scope="row">Suero fisiológico 0,9 % c.s.p.</th><td colspan="4"><strong>${fmt(r.suero)} ml</strong></td></tr>
+            <tr class="suero"><th scope="row">Suero fisiológico 0,9 % a añadir</th><td colspan="4"><strong>${fmt(r.suero)} ml</strong></td></tr>
           </tbody></table></div>
         <div class="meter ${r.volumenExcedido ? 'over' : ''}" role="img" aria-label="Volumen de fármacos ${fmt(r.volumenAspirado)} de ${fmt(r.infusor.llenado)} ml"><span style="width:${pct}%"></span></div>
-        <ul class="lista desglose">
-          <li><strong>Volumen total de fármacos a aspirar:</strong> ${fmt(r.volumenAspirado)} ml</li>
-          ${r.farmacos.map((f) => `<li>${esc(f.nombre)}: ${f.ampollas} amp. de ${esc(f.presentacion.label)}; desechar ${fmt(f.volumenSobrante)} ml</li>`).join('')}
-          <li><strong>Suero fisiológico 0,9 % a añadir:</strong> ${fmt(r.suero)} ml</li>
-          <li><strong>Volumen final total preparado:</strong> ${fmt(r.volumenFinal)} ml (llenado ${fmt(r.infusor.llenado)} ml)</li>
-        </ul>
+        <p class="resumen-vol"><strong>Volumen final total preparado:</strong> ${fmt(r.volumenFinal)} ml (llenado ${fmt(r.infusor.llenado)} ml)</p>
+        <details class="detalles-secundarios">
+          <summary>Desglose paso a paso</summary>
+          <ul class="lista desglose">
+            <li><strong>Volumen total de fármacos a aspirar:</strong> ${fmt(r.volumenAspirado)} ml</li>
+            ${r.farmacos.map((f) => `<li>${esc(f.nombre)}: ${f.ampollas} amp. de ${esc(f.presentacion.label)}; desechar ${fmt(f.volumenSobrante)} ml</li>`).join('')}
+            <li><strong>Suero fisiológico 0,9 % a añadir:</strong> ${fmt(r.suero)} ml</li>
+            <li><strong>Volumen final total preparado:</strong> ${fmt(r.volumenFinal)} ml (llenado ${fmt(r.infusor.llenado)} ml)</li>
+          </ul>
+        </details>
       </div>
       <div class="card">
         <h3>Rescates SC · intervalo mínimo de seguridad</h3>
         <ul class="lista">${rescates || '<li class="muted">Sin rescates definidos.</li>'}</ul>
       </div>
-      <div class="card estado ${r.semaforo.nivel}"><strong>${{ rojo: '⛔', ambar: '⚠️', verde: 'ℹ️' }[r.semaforo.nivel]}${esc(r.semaforo.resumen)}</strong>
-        ${r.semaforo.alertas.map((a) => `<p>${esc(a.mensaje)}</p>`).join('')}
-      </div>
+      ${estado}
       <div class="btn-row"><button class="btn primary" type="button" data-act="a-nota">📝 Pasar a nota clínica</button></div>`;
   }
   function initInfusor() {
@@ -201,9 +259,11 @@
     sel.addEventListener('change', () => {
       state.infusor = sel.value;
       $('#custom-fields').hidden = sel.value !== 'custom';
+      syncDurBtnsFromInfusor();
       recalcular();
     });
-    ['#c-llenado', '#c-real', '#c-ritmo'].forEach((s) => $(s).addEventListener('input', recalcular));
+    $$('.dur-btn').forEach((b) => b.addEventListener('click', () => setDuracion(Number(b.dataset.dias))));
+    ['#c-llenado', '#c-real', '#c-ritmo'].forEach((s) => $(s).addEventListener('input', () => { syncDurBtnsFromInfusor(); recalcular(); }));
     const list = $('#farmacos-list');
     list.addEventListener('input', (e) => {
       const fila = e.target.closest('.fila');
@@ -237,6 +297,7 @@
       if (ult) $('input', ult).focus();
     });
     $('#resultado').addEventListener('click', (e) => { if (e.target.closest('[data-act="a-nota"]')) switchTab('nota'); });
+    syncDurBtnsFromInfusor();
     renderRows(); recalcular();
   }
 
@@ -409,6 +470,7 @@
     state.infusor = 'sfs2_252';
     $('#infusor-select').value = state.infusor; $('#custom-fields').hidden = true;
     $('#c-llenado').value = '100'; $('#c-real').value = ''; $('#c-ritmo').value = '2';
+    syncDurBtnsFromInfusor();
     $('#opioide-select').value = 'fentanilo_td';
     $('#opioide-dosis').value = ''; $('#opioide-reduccion').value = '0';
     $$('#panel-nota input[type="text"], #panel-nota textarea:not(#nota-texto)').forEach((el) => { el.value = ''; });
@@ -445,7 +507,7 @@
 
   /* ───────────── Arranque ───────────── */
   function init() {
-    initTheme(); initTabs(); initSemaforo();
+    initTheme(); initModo(); initTabs(); initSemaforo();
     initInfusor(); initGuiado(); initOpioides(); initNota(); initFamilias();
     if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
       navigator.serviceWorker.register('sw.js').catch(() => { /* offline-first: fallo silencioso */ });

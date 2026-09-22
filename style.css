@@ -49,6 +49,15 @@ small { color: var(--muted); }
 .icon-btn { width: 44px; height: 44px; border-radius: 50%; border: 1px solid #334155; background: transparent; color: #f8fafc; cursor: pointer; display: grid; place-items: center; }
 .icon-btn:hover { background: #1e293b; }
 
+/* Conmutador Sencillo / Experto */
+.mode-toggle { display: inline-flex; background: #1e293b; border: 1px solid #334155; border-radius: 999px; padding: 2px; gap: 2px; }
+.mode-btn {
+  border: 0; background: transparent; color: #94a3b8; font: inherit; font-size: .78rem; font-weight: 700;
+  min-height: 36px; padding: 0 .8rem; border-radius: 999px; cursor: pointer;
+}
+.mode-btn.active { background: var(--teal); color: #fff; }
+[data-theme="dark"] .mode-btn.active { background: var(--accent); color: var(--accent-ink); }
+
 /* Semáforo */
 .semaforo {
   display: inline-flex; align-items: center; gap: .45rem; min-height: 44px; padding: .3rem .85rem; border-radius: 999px;
@@ -100,6 +109,27 @@ input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--teal); f
 .fila { display: grid; gap: .4rem; padding: .7rem 0; border-top: 1px dashed var(--border); grid-template-columns: 1fr; position: relative; }
 .fila:first-child { border-top: 0; }
 .fila .btn.icon { justify-self: end; }
+
+/* Duración rápida del infusor */
+.duracion-wrap { margin-bottom: .2rem; }
+.duracion-selector { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; }
+.dur-btn {
+  min-height: var(--tap); border: 1.5px solid var(--border); border-radius: 12px; background: var(--input); color: var(--text);
+  font: inherit; font-weight: 700; cursor: pointer;
+}
+.dur-btn:hover { border-color: var(--accent); }
+.dur-btn.active { background: var(--teal); border-color: var(--teal); color: #fff; }
+[data-theme="dark"] .dur-btn.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+.device-advanced { margin-top: .8rem; padding-top: .6rem; border-top: 1px dashed var(--border); }
+.field-label { display: block; font-size: .85rem; font-weight: 600; color: var(--muted); margin: .7rem 0 .25rem; }
+
+/* Resultado simplificado */
+.resumen-vol { margin: .6rem 0 0; font-size: .95rem; }
+.detalles-secundarios { margin-top: .6rem; }
+.detalles-secundarios summary { cursor: pointer; font-weight: 600; font-size: .88rem; color: var(--muted); min-height: 32px; }
+.detalles-secundarios .lista { margin-top: .6rem; }
+.estado-discreto { margin: .6rem 0 0; font-size: .88rem; color: var(--muted); }
 
 .chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .8rem; }
 .chip { background: var(--soft); border-radius: 999px; padding: .25rem .7rem; font-size: .85rem; font-weight: 600; }
@@ -170,6 +200,9 @@ button.opt.peligro { border-color: var(--rose); }
 .acordeon p { margin: .7rem 0 0; font-size: 1.02rem; line-height: 1.65; }
 
 .footer { max-width: 860px; margin: 1rem auto; padding: 0 1rem; font-size: .8rem; color: var(--muted); }
+.footer p { margin: 0 0 .3rem; }
+.footer .legal { margin-bottom: 0; }
+
 .toast {
   position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 50;
   background: var(--navy); color: #fff; padding: .7rem 1.2rem; border-radius: 999px; font-weight: 600; box-shadow: var(--shadow); max-width: 92vw;
@@ -191,5 +224,20 @@ button.opt.peligro { border-color: var(--rose); }
   .tagline { display: none; }
   .kpi strong { font-size: 1.25rem; }
 }
+@media (max-width: 580px) {
+  .topbar { flex-wrap: wrap; row-gap: .4rem; }
+  .brand { flex: 1 1 auto; }
+  .topbar-actions { flex-wrap: wrap; justify-content: flex-end; }
+  body[data-modo="sencillo"] .fila { grid-template-columns: 1fr; }
+  body[data-modo="sencillo"] .fila .btn.icon { justify-self: end; }
+}
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 @media print { .tabs, .topbar-actions, .toast { display: none; } }
+
+/* Modo Sencillo: oculta ajustes avanzados y reduce densidad visual */
+body[data-modo="sencillo"] .device-advanced { display: none; }
+body[data-modo="sencillo"] .fila-pres { display: none; }
+body[data-modo="sencillo"] .card { padding: .85rem; }
+@media (min-width: 580px) {
+  body[data-modo="sencillo"] .fila { grid-template-columns: 1.4fr 1fr auto; align-items: end; }
+}

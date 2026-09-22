@@ -21,6 +21,7 @@
     baxter_2c1009k: { id: 'baxter_2c1009k', nombre: 'Baxter 2C1009K · 100 ml @ 2 ml/h', llenado: 100, volumenReal: 100, ritmo: 2 },
     dia_48: { id: 'dia_48', nombre: 'Infusor 1 día · 48 ml @ 2 ml/h', llenado: 48, volumenReal: 48, ritmo: 2 },
     dia_60: { id: 'dia_60', nombre: 'Infusor 1 día · 60 ml @ 2,5 ml/h', llenado: 60, volumenReal: 60, ritmo: 2.5 },
+    dia_7: { id: 'dia_7', nombre: 'Infusor 7 días · 250 ml @ 1,5 ml/h (168 h)', llenado: 250, volumenReal: 252, ritmo: 1.5 },
     custom: { id: 'custom', nombre: 'Personalizado', llenado: 100, volumenReal: 100, ritmo: 2 },
   };
 

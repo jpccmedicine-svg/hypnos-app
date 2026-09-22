@@ -27,6 +27,10 @@
         <span class="dot" aria-hidden="true"></span>
         <span class="semaforo-label" id="semaforo-label">Sin alertas automáticas</span>
       </button>
+      <div class="mode-toggle" role="radiogroup" aria-label="Modo de interfaz">
+        <button type="button" id="btn-modo-sencillo" class="mode-btn active" role="radio" aria-checked="true" data-modo="sencillo" title="Modo directo: duración y dosis">Sencillo</button>
+        <button type="button" id="btn-modo-experto" class="mode-btn" role="radio" aria-checked="false" data-modo="experto" title="Modo avanzado: presentaciones y dispositivos">Experto</button>
+      </div>
       <button id="theme-toggle" class="icon-btn" type="button" aria-label="Cambiar a modo oscuro" title="Modo oscuro / claro">
         <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path id="theme-icon" fill="currentColor" d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>
       </button>
@@ -47,15 +51,24 @@
     <!-- TAB 1 · MODO RÁPIDO / INFUSOR -->
     <section id="panel-rapido" role="tabpanel" aria-labelledby="tab-rapido" class="panel">
       <h2>Modo Rápido · Infusor elastomérico</h2>
-      <p class="lead">Dosis diaria SC → preparación exacta sobre días reales de duración.</p>
 
       <div class="card">
-        <label for="infusor-select">Dispositivo</label>
-        <select id="infusor-select"></select>
-        <div id="custom-fields" class="grid3" hidden>
-          <div><label for="c-llenado">Llenado (ml)</label><input id="c-llenado" type="number" inputmode="decimal" min="1" step="any" value="100"></div>
-          <div><label for="c-real">Vol. real (ml)</label><input id="c-real" type="number" inputmode="decimal" min="1" step="any" placeholder="= llenado"></div>
-          <div><label for="c-ritmo">Ritmo (ml/h)</label><input id="c-ritmo" type="number" inputmode="decimal" min="0.1" step="any" value="2"></div>
+        <div class="duracion-wrap">
+          <label class="field-label">Duración habitual</label>
+          <div class="duracion-selector" role="radiogroup" aria-label="Duración del infusor">
+            <button type="button" class="dur-btn" role="radio" aria-checked="false" data-dias="1">1 día</button>
+            <button type="button" class="dur-btn active" role="radio" aria-checked="true" data-dias="5">5 días</button>
+            <button type="button" class="dur-btn" role="radio" aria-checked="false" data-dias="7">7 días</button>
+          </div>
+        </div>
+        <div id="device-advanced" class="device-advanced">
+          <label for="infusor-select" class="field-label">Dispositivo específico</label>
+          <select id="infusor-select"></select>
+          <div id="custom-fields" class="grid3" hidden>
+            <div><label for="c-llenado">Llenado (ml)</label><input id="c-llenado" type="number" inputmode="decimal" min="1" step="any" value="100"></div>
+            <div><label for="c-real">Vol. real (ml)</label><input id="c-real" type="number" inputmode="decimal" min="1" step="any" placeholder="= llenado"></div>
+            <div><label for="c-ritmo">Ritmo (ml/h)</label><input id="c-ritmo" type="number" inputmode="decimal" min="0.1" step="any" value="2"></div>
+          </div>
         </div>
         <div id="infusor-resumen" class="chips" aria-live="polite"></div>
       </div>
@@ -151,8 +164,8 @@
   </main>
 
   <footer class="footer">
-    <p><strong>Herramienta de apoyo a la decisión clínica.</strong> No sustituye el juicio profesional. Verifique dosis y compatibilidades antes de prescribir. Todos los datos se procesan en este dispositivo y funcionan sin conexión.</p>
-    <p class="muted">HYPNOS v2.0 · Sesión clínica HU Cuenca</p>
+    <p class="muted"><strong>HYPNOS v2.0</strong> · Herramienta Local-First de apoyo a la decisión clínica en Cuidados Paliativos.</p>
+    <p class="muted legal"><small>No sustituye el juicio facultativo ni la comprobación de dosis y compatibilidades antes de la administración.</small></p>
   </footer>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>

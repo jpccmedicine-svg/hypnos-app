@@ -26,6 +26,11 @@ test('Infusores 1 día (48 y 60 ml) → 24 h', () => {
   cerca(H.calcularDuracion('dia_48').horas, 24);
   cerca(H.calcularDuracion('dia_60').horas, 24);
 });
+test('Infusor 7 días 250 ml @ 1,5 ml/h (252 ml reales) → 168 h / 7.00 días exactos', () => {
+  const d = H.calcularDuracion('dia_7');
+  cerca(d.horas, 168); cerca(d.dias, 7);
+  assert.strictEqual(d.infusor.llenado, 250); assert.strictEqual(d.infusor.volumenReal, 252);
+});
 test('Personalizado y validación', () => {
   cerca(H.calcularDuracion({ id: 'custom', llenado: 120, ritmo: 3 }).horas, 40);
   assert.throws(() => H.calcularDuracion({ id: 'custom', llenado: 100, ritmo: 0 }));
@@ -47,6 +52,25 @@ test('rescate = 1/6 de 60 mg = 10 mg (0.5 ml de ampolla 2%)', () => {
   cerca(testigo.farmacos[0].rescate.mlMin, 0.5);
 });
 test('semáforo verde', () => assert.strictEqual(testigo.semaforo.nivel, 'verde'));
+
+console.log('\nSelector de duración rápida: 1 día / 5 días / 7 días (morfina 60 mg/día)');
+test('1 día (dia_48, 48 ml @ 2 ml/h): 24 h, 60 mg totales, 3 ml a aspirar', () => {
+  const r = H.calcularInfusor({ infusor: 'dia_48', farmacos: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }] });
+  cerca(r.horas, 24); cerca(r.dias, 1);
+  cerca(r.farmacos[0].totalMg, 60); cerca(r.farmacos[0].volumenAspirar, 3);
+  cerca(r.suero, 45);
+});
+test('5 días (sfs2_252, 126 h reales): 315 mg totales, 15.75 ml a aspirar', () => {
+  const r = H.calcularInfusor({ infusor: 'sfs2_252', farmacos: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }] });
+  cerca(r.horas, 126); cerca(r.dias, 5.25);
+  cerca(r.farmacos[0].totalMg, 315); cerca(r.farmacos[0].volumenAspirar, 15.75);
+});
+test('7 días (dia_7, 168 h exactas): 420 mg totales, 21 ml a aspirar, 229 ml de suero', () => {
+  const r = H.calcularInfusor({ infusor: 'dia_7', farmacos: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }] });
+  cerca(r.horas, 168); cerca(r.dias, 7);
+  cerca(r.farmacos[0].totalMg, 420); cerca(r.farmacos[0].volumenAspirar, 21);
+  cerca(r.suero, 229); cerca(r.volumenFinal, 250);
+});
 
 console.log('\nFármacos y presentaciones');
 test('vial morfina 400 mg/20 ml: 1 vial, 4.25 ml sobrantes', () => {
