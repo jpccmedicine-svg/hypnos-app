@@ -1,4 +1,4 @@
-/* HYPNOS v2.0 — Motor algorítmico y de lógica clínica.
+/* HYPNOS v2.1 — Motor algorítmico y de lógica clínica.
  * Sin dependencias. Funciona en navegador (window.HypnosEngine) y Node (require).
  * Herramienta de apoyo a la decisión: NO sustituye el juicio clínico. */
 (function (root, factory) {
@@ -7,6 +7,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
+  const VERSION = '2.1';
   const EPS = 1e-9;
   const round = (n, d = 2) => Math.round((n + Number.EPSILON) * Math.pow(10, d)) / Math.pow(10, d);
 
@@ -21,6 +22,8 @@
     baxter_2c1009k: { id: 'baxter_2c1009k', nombre: 'Baxter 2C1009K · 100 ml @ 2 ml/h', llenado: 100, volumenReal: 100, ritmo: 2 },
     dia_48: { id: 'dia_48', nombre: 'Infusor 1 día · 48 ml @ 2 ml/h', llenado: 48, volumenReal: 48, ritmo: 2 },
     dia_60: { id: 'dia_60', nombre: 'Infusor 1 día · 60 ml @ 2,5 ml/h', llenado: 60, volumenReal: 60, ritmo: 2.5 },
+    // 2 días (50 h): Baxter Infusor LV 2 (2C1009K), Surefuser+ SMA 100-2, Dosi-Fuser.
+    dia_2: { id: 'dia_2', nombre: 'Infusor 2 días · 100 ml @ 2 ml/h (50 h)', llenado: 100, volumenReal: 100, ritmo: 2 },
     dia_7: { id: 'dia_7', nombre: 'Infusor 7 días · 250 ml @ 1,5 ml/h (168 h)', llenado: 250, volumenReal: 252, ritmo: 1.5 },
     custom: { id: 'custom', nombre: 'Personalizado', llenado: 100, volumenReal: 100, ritmo: 2 },
   };
@@ -150,6 +153,17 @@
 
   function bloqueoMetadona() {
     return { bloqueado: true, nivel: 'rojo', codigo: 'METADONA', mensaje: MENSAJE_METADONA };
+  }
+
+  /* Semáforo global: une las alertas de todos los módulos (sin duplicar código) y deriva el nivel. */
+  function semaforoGlobal(...listas) {
+    const alertas = [];
+    const vistos = {};
+    listas.forEach((l) => (l || []).forEach((a) => {
+      if (!vistos[a.codigo]) { vistos[a.codigo] = 1; alertas.push(a); }
+    }));
+    const nivel = alertas.some((a) => a.nivel === 'rojo') ? 'rojo' : alertas.length ? 'ambar' : 'verde';
+    return { nivel, alertas };
   }
 
   /* entrada: { farmacos:[ids], dias, volumenExcedido:bool, metadona:bool } */
@@ -367,6 +381,18 @@
     L.push('NOTA CLÍNICA · CUIDADOS PALIATIVOS (' + sis + ')');
     L.push('Fecha: ' + (d.fecha || fechaLocal()) + (d.ambito ? ' · Ámbito: ' + d.ambito : ''));
     if (d.paciente) L.push('Paciente (ident.): ' + d.paciente);
+    // Semáforo global: alertas activas de todos los módulos (d.alertas) más las del infusor.
+    if (Array.isArray(d.alertas) || d.infusor) {
+      const sg = semaforoGlobal(d.alertas, d.infusor && d.infusor.semaforo.alertas);
+      L.push('');
+      L.push('SEMÁFORO CLÍNICO GLOBAL: ' + sg.nivel.toUpperCase() + (sg.alertas.length
+        ? ' — ' + sg.alertas.length + (sg.alertas.length === 1 ? ' alerta activa' : ' alertas activas')
+        : ' — sin alertas automáticas (requiere validación del prescriptor)'));
+      if (sg.nivel === 'rojo') {
+        L.push('⛔ ALERTA ROJA ACTIVA (' + sg.alertas.filter((a) => a.nivel === 'rojo').map((a) => a.codigo).join(', ') + '): pauta NO validada; no prescribir ni administrar hasta resolverla.');
+      }
+      sg.alertas.forEach((a) => L.push('- [' + a.nivel.toUpperCase() + '] ' + a.codigo + ': ' + a.mensaje));
+    }
     L.push('');
     L.push('MOTIVO / SITUACIÓN: ' + (CONTEXTOS[d.contexto] || d.contexto || '—'));
     if (d.sintomas) L.push('SÍNTOMAS: ' + d.sintomas);
@@ -389,7 +415,7 @@
         L.push('RESCATES SC:');
         resc.forEach((f) => L.push('- ' + f.nombre + ': ' + f.rescate.texto));
       }
-      L.push('SEMÁFORO DE SEGURIDAD: ' + r.semaforo.nivel.toUpperCase() + (r.semaforo.alertas.length ? ' — ' + r.semaforo.alertas.map((a) => a.codigo).join(', ') : ''));
+      L.push('SEMÁFORO DEL INFUSOR: ' + r.semaforo.nivel.toUpperCase() + (r.semaforo.alertas.length ? ' — ' + r.semaforo.alertas.map((a) => a.codigo).join(', ') : ''));
     }
     if (d.conversion && !d.conversion.error && !d.conversion.bloqueado) {
       const c = d.conversion;
@@ -408,14 +434,14 @@
     if (d.sedacion) L.push('Sedación paliativa: indicación, consentimiento/decisión compartida y consenso de equipo documentados.');
     L.push('Metadona: no prescrita/convertida mediante herramienta (bloqueo ético).');
     if (d.observaciones) L.push('OBSERVACIONES: ' + d.observaciones);
-    L.push('Reevaluación en 24 h o antes si mal control. Herramienta de apoyo (HYPNOS v2.0); decisión clínica bajo responsabilidad del facultativo.');
+    L.push('Reevaluación en 24 h o antes si mal control. Herramienta de apoyo (HYPNOS v' + VERSION + '); decisión clínica bajo responsabilidad del facultativo.');
     return L.join('\n');
   }
 
   /* ───────────── Apoyo a familias ───────────── */
   const FAMILIAS = [
     { pregunta: '¿La inyección lo matará?', respuesta: 'Entendemos que esta sea la mayor preocupación, y es una pregunta muy válida. Los medicamentos que usamos (morfina, midazolam…) se ajustan con cuidado a lo que su familiar necesita para no sufrir: se empieza con dosis bajas y se sube solo si hace falta. Cuando se usan así, no acortan la vida. Lo que está causando el final es la enfermedad, no la medicación. Nuestro objetivo es que esté tranquilo, sin dolor y sin angustia.' },
-    { pregunta: '¿Se ahoga con el estertor?', respuesta: 'Ese ruido, como un burbujeo, lo producen las secreciones que ya no puede tragar ni toser. Suele ser más angustioso para quien lo oye que para quien lo tiene: en esta fase la persona está muy dormida y no siente ahogo. Podemos cambiarlo de postura y darle un medicamento que reduce las secreciones. Estamos aquí para ayudarles.' },
+    { pregunta: '¿Se ahoga con el estertor?', respuesta: 'Ese ruido, como un burbujeo, lo producen las secreciones que ya no puede tragar ni toser. Suele ser más angustioso para quien lo oye que para quien lo tiene: en esta fase la persona suele estar en un sueño profundo y habitualmente no siente ahogo. No obstante, vigilamos siempre sus gestos para asegurar su comodidad. Podemos cambiarle de postura y administrar medicación que reduce las secreciones. Estamos aquí para ayudarles.' },
     { pregunta: '¿Por qué no come ni bebe?', respuesta: 'Es una parte natural del proceso: el cuerpo ya no necesita ni puede aprovechar la comida. No pasa hambre ni sed de la forma en que nosotros lo imaginamos. Forzar la comida o poner suero puede causarle molestias. Lo que sí le alivia es mantener la boca húmeda con una gasa o esponja y labios hidratados; es una forma preciosa de cuidarle.' },
     { pregunta: '¿Está sufriendo? Duerme mucho.', respuesta: 'Dormir más es normal en los últimos días. Observamos su gesto, su respiración y sus movimientos para saber si está cómodo. Si aparecen señales de dolor o inquietud, se lo diremos y ajustaremos el tratamiento. Puede que le oiga: háblele, tóquele la mano, dígale lo que necesite decirle.' },
     { pregunta: '¿Es lo mismo sedación que eutanasia?', respuesta: 'No. La sedación paliativa se usa solo cuando un síntoma no se controla con otros medios; se ajusta la dosis para aliviar el sufrimiento, no para provocar la muerte. La eutanasia busca terminar con la vida de forma intencionada. Nunca se sedará sin explicarles antes la situación y sin su acuerdo o el de su familiar cuando sea posible.' },
@@ -432,9 +458,179 @@
     'Llame al teléfono de guardia si: dolor intenso, ahogo, agitación que no cede, sangrado, la palomita se sale/enrojece o tiene dudas.',
   ];
 
+  /* ───────────── Guías imprimibles para familias ─────────────
+   * Basadas en recomendaciones SECPAL. Nunca indican dosis en mg: la familia administra
+   * exactamente los ml escritos por el equipo en la hoja de pauta.
+   * Sección: { titulo, contenido?, destacado?, items?, numerada? } · teléfono con numero null = espacio para anotar. */
+  const AVISO_ML =
+    'Compruebe siempre en la hoja de pauta escrita por el equipo la cantidad que debe cargar en la jeringa, en ml (mililitros). ' +
+    'Nunca administre una dosis expresada solo en mg (miligramos): ante cualquier duda, llame al equipo antes de ponerla.';
+  const FUENTE_GUIAS =
+    'Basada en recomendaciones de la Sociedad Española de Cuidados Paliativos (SECPAL). Información general: siga siempre las indicaciones de su equipo sanitario.';
+  const TELEFONOS_FAMILIA = [
+    { id: 'esad', servicio: 'ESAD · Equipo de Soporte de Atención Domiciliaria', numero: null },
+    { id: 'centro_salud', servicio: 'Centro de Salud', numero: null },
+    { id: 'emergencias', servicio: 'Emergencias sanitarias (24 h)', numero: '112', nota: 'Indique que su familiar recibe cuidados paliativos en el domicilio.' },
+  ];
+
+  const GUIAS_FAMILIA = [
+    {
+      id: 'rescate_sc',
+      titulo: 'Administración de rescates por vía subcutánea (palomita)',
+      subtitulo: 'Cómo poner en casa, con seguridad, la dosis extra de medicación que ha pautado el equipo',
+      introduccion: 'Un rescate es una dosis extra de medicación para aliviar un síntoma que aparece o empeora (dolor, falta de aire, inquietud…). ' +
+        'El equipo le ha enseñado a administrarlo a través de la palomita y le ha dejado por escrito qué medicamento y qué cantidad corresponden a cada síntoma. ' +
+        'Esta guía le recuerda los pasos para hacerlo con seguridad.',
+      secciones: [
+        { titulo: '¿Qué es la vía subcutánea?',
+          contenido: 'La palomita es una aguja muy fina o un pequeño tubo de plástico que queda fijo bajo la piel (en el pecho, el abdomen, los brazos o los muslos), sujeto con un apósito transparente. ' +
+            'Permite administrar la medicación de forma sencilla cuando su familiar no puede tragar. Poner un rescate a través de ella apenas le molesta y no requiere volver a pincharle.' },
+        { titulo: 'Comprobación obligatoria antes de cada dosis',
+          destacado: 'Verifique siempre la prescripción en ml (mililitros que debe cargar en la jeringa), nunca en mg, y que la concentración de la ampolla o del vial es exactamente la que figura en la hoja de pauta.',
+          items: [
+            'Consulte la hoja de pauta escrita por el equipo: qué medicamento corresponde al síntoma que presenta su familiar y cuántos ml debe cargar.',
+            'Compruebe que el nombre del medicamento de la ampolla o de la jeringa coincide con el de la pauta.',
+            'Compruebe la presentación y la concentración: lo que indica la etiqueta de la ampolla o del vial (por ejemplo, «por cada ml») debe coincidir exactamente con lo que figura en la hoja de pauta del equipo. El mismo medicamento existe en concentraciones distintas, y la misma cantidad de ml puede contener una dosis muy diferente. Si no coincide o tiene dudas, no la administre y llame al equipo.',
+            'Mire en su registro la hora del último rescate y confirme que ya ha pasado el intervalo mínimo indicado.',
+          ] },
+        { titulo: 'Técnica paso a paso', numerada: true, items: [
+          'Lávese bien las manos con agua y jabón (o con gel hidroalcohólico) y prepare el material sobre una superficie limpia.',
+          'Cargue en la jeringa exactamente los ml pautados. Si el equipo le ha dejado las jeringas ya preparadas, compruebe la etiqueta.',
+          'Purgue la jeringa: con la punta hacia arriba, dé unos golpecitos y empuje el émbolo con suavidad hasta eliminar todo el aire, sin perder medicación.',
+          'Desinfecte el conector (tapón) de la palomita con una gasa empapada en el antiséptico indicado por el equipo y deje que se seque unos segundos.',
+          'Introduzca la jeringa en el conector, tal como le enseñó el equipo, e inyecte lentamente, sin forzar. No es necesario aspirar antes de inyectar.',
+          'Respete la pauta: no repita ni aumente la dosis por su cuenta.',
+          'Deseche la jeringa (y la aguja, si la ha usado) en el contenedor rígido que le haya facilitado el equipo, nunca en la basura doméstica, y vuelva a lavarse las manos.',
+        ] },
+        { titulo: 'Intervalo mínimo de seguridad y registro', items: [
+          'Respete el tiempo mínimo entre dosis que figura en la hoja de pauta. Si el síntoma no mejora antes de ese tiempo, no repita la dosis: llame al equipo.',
+          'Anote cada rescate: hora, medicamento, ml administrados y motivo. Este registro ayuda al equipo a ajustar el tratamiento.',
+          'Observe el efecto a los 20–30 minutos. Si necesita más de 3 rescates en 24 horas, comuníqueselo al equipo: probablemente haya que ajustar la medicación de base.',
+        ] },
+        { titulo: 'Vigile la zona de la palomita',
+          contenido: 'Revise la zona cada día y antes de cada rescate.',
+          destacado: 'Si observa alguno de estos signos, no utilice esa palomita ni intente recolocarla: llame al equipo para que la cambien de sitio.',
+          items: [
+            'Enrojecimiento (eritema) o calor alrededor del punto de punción.',
+            'Dolor agudo o escozor al inyectar, o dolor persistente en la zona.',
+            'Bulto duro (induración) o hinchazón bajo la piel.',
+            'Salida de líquido o de medicación por el punto de punción (reflujo), o el apósito mojado.',
+            'La palomita se ha salido o desconectado, o el apósito se ha despegado.',
+            'Sangrado en la zona.',
+          ] },
+      ],
+      advertencias: [
+        AVISO_ML,
+        'Administre solo los medicamentos pautados por el equipo para cada síntoma y respete el intervalo mínimo entre dosis.',
+        'No vuelva a pinchar a su familiar ni recoloque la palomita: si se sale o la zona está alterada, llame al equipo.',
+      ],
+      telefonos: TELEFONOS_FAMILIA,
+      fuente: FUENTE_GUIAS,
+    },
+    {
+      id: 'sintomas_domicilio',
+      titulo: 'Guía rápida ante síntomas frecuentes en el domicilio',
+      subtitulo: 'Qué hacer si aparecen dolor, falta de aire, estertores o inquietud',
+      introduccion: 'En la fase avanzada de la enfermedad pueden aparecer síntomas que asustan, pero la mayoría pueden aliviarse en casa. ' +
+        'Tenga a mano la hoja de pauta del equipo: en ella figura el rescate indicado para cada síntoma y la cantidad en ml. ' +
+        'Además de la medicación, las medidas de confort y su compañía serena ayudan mucho a su familiar.',
+      secciones: [
+        { titulo: 'Dolor irruptivo',
+          contenido: 'Es un dolor que aparece de forma brusca o aumenta a pesar de la medicación habitual, a veces al moverle o asearle.',
+          items: [
+            'Administre el rescate pautado para el dolor, en los ml indicados en la hoja de pauta.',
+            'Ayúdele a encontrar una postura confortable, con almohadas que sostengan las zonas doloridas, y muévale con suavidad.',
+            'Acompáñele con serenidad: una presencia tranquila y una voz calmada también alivian.',
+            'Si el dolor no mejora en 20–30 minutos, llame al equipo.',
+          ] },
+        { titulo: 'Disnea (sensación de falta de aire)',
+          contenido: 'La sensación de ahogo genera mucha angustia, tanto en quien la sufre como en quien le acompaña. Mantener la calma ayuda a su familiar a respirar mejor.',
+          items: [
+            'Administre el rescate pautado específicamente para la disnea, en los ml indicados.',
+            'Colóquele semiincorporado, elevando el cabecero de la cama o con almohadas en la espalda.',
+            'Mantenga la habitación fresca y ventilada; una corriente de aire suave dirigida a la cara (con un abanico, por ejemplo) alivia la sensación de falta de aire.',
+            'Evite la sensación de agobio: pocas personas alrededor de la cama, espacio despejado y ropa holgada.',
+            'Háblele despacio y con calma; su tranquilidad le transmite seguridad.',
+          ] },
+        { titulo: 'Estertores (respiración ruidosa en los últimos días)',
+          contenido: 'Es un ruido como un burbujeo o gorgoteo al respirar, producido por secreciones en la garganta que su familiar ya no puede tragar ni expulsar. Es frecuente en las últimas horas o días de vida.',
+          destacado: 'Cuando su familiar está en fase de agonía o profundamente dormido, el ruido por sí mismo habitualmente no significa que se esté ahogando ni que esté sufriendo; suele angustiar mucho más a quien lo escucha. ' +
+            'Aun así, fíjese en su cara y en sus gestos: si nota signos de incomodidad, avise al equipo.',
+          items: [
+            'Colóquele de lado, con la cabeza ligeramente elevada, para que las secreciones no se acumulen en la garganta.',
+            'Administre la medicación antisecretora pautada por el equipo para reducir las secreciones, en los ml indicados.',
+            'Evite las aspiraciones profundas de secreciones: son molestas y no le ayudan. Puede limpiarle la boca con suavidad con una gasa húmeda.',
+            'Vigile su expresión facial y sus gestos: ceño fruncido, muecas, gemidos, inquietud o respiración muy agitada pueden indicar incomodidad. Ante cualquiera de estos signos, consulte con el equipo.',
+          ] },
+        { titulo: 'Agitación o inquietud',
+          contenido: 'Algunas personas se muestran inquietas o confusas, intentan levantarse o se destapan. Puede deberse a la propia enfermedad o a molestias que conviene revisar.',
+          items: [
+            'Cree un ambiente relajado: luz tenue, silencio o música suave y pocas personas en la habitación.',
+            'Háblele con un tono suave y pausado, dígale quién está a su lado y evite discutir o llevarle la contraria.',
+            'Su presencia afectiva tranquiliza: siéntese cerca y cójale la mano si lo acepta.',
+            'Compruebe si algo le molesta: postura incómoda, sábanas arrugadas, pañal mojado, calor o frío. Si lleva muchas horas sin orinar y tiene el vientre hinchado, avise al equipo.',
+            'Si la inquietud persiste y el equipo ha pautado un rescate sedante, adminístrelo en los ml indicados. Si no cede o puede hacerse daño, llame al equipo.',
+          ] },
+      ],
+      advertencias: [
+        AVISO_ML,
+        'Llame al equipo si el síntoma no mejora 20–30 minutos después del rescate o si necesita más de 3 rescates en 24 horas.',
+        'Si no localiza al equipo ante una situación que no puede controlar, llame al 112.',
+      ],
+      telefonos: TELEFONOS_FAMILIA,
+      fuente: FUENTE_GUIAS,
+    },
+    {
+      id: 'ultimos_dias',
+      titulo: 'Dudas frecuentes y acompañamiento en los últimos días',
+      subtitulo: 'Respuestas a los miedos más habituales y claves para acompañar',
+      introduccion: 'Acompañar a una persona querida en sus últimos días es una experiencia intensa. Es normal sentir miedo, cansancio o dudas. ' +
+        'Aquí encontrará respuestas a las preguntas más frecuentes; comente cualquier otra con el equipo, que está para ayudarles.',
+      secciones: [
+        { titulo: '¿La morfina o la sedación aceleran el final?',
+          contenido: 'No. La morfina y la sedación paliativa, utilizadas de forma proporcionada (ajustadas por el equipo a la dosis necesaria para aliviar), no aceleran el fallecimiento. ' +
+            'Alivian el dolor, la falta de aire y el sufrimiento, respetando el proceso natural de la vida. Lo que marca el final es la propia enfermedad, no la medicación.',
+          items: [
+            'La dosis se empieza baja y solo se aumenta si hace falta para que su familiar esté confortable.',
+            'La sedación paliativa se reserva para síntomas que no se controlan de otra forma. Se decide tras explicarla, con el consentimiento de su familiar o, si ya no puede darlo, contando con ustedes. No es eutanasia.',
+          ] },
+        { titulo: '¿Por qué ya no come ni bebe?',
+          contenido: 'Comer y beber cada vez menos es un proceso fisiológico y natural al final de la vida: el organismo ya no necesita ni puede aprovechar los alimentos. ' +
+            'Su familiar no siente hambre ni sed como las sentiría una persona sana. Forzarle a comer o beber, o ponerle sueros, puede ser contraproducente (atragantamientos, más secreciones, hinchazón o sensación de ahogo).',
+          destacado: 'La medida de confort esencial es la higiene de la boca: humedezca a menudo sus labios y su lengua con una gasa o esponja húmeda.',
+          items: [
+            'Limpie la boca con suavidad varias veces al día y mantenga los labios hidratados con un protector labial.',
+            'Si está despierto y traga sin dificultad, puede ofrecerle pequeños sorbos o trocitos de hielo, sin insistir.',
+          ] },
+        { titulo: '¿Nos oye? Cómo acompañarle',
+          contenido: 'El oído permanece activo hasta fases muy avanzadas, aunque su familiar parezca dormido o no pueda responder.',
+          items: [
+            'Háblele con calma y voz suave; dígale quién está a su lado.',
+            'Exprese su afecto y dígale lo que necesite decirle: gracias, te quiero, perdón, adiós.',
+            'Acompáñele, sosténgale la mano y acaríciele con suavidad: el contacto transmite seguridad.',
+            'Evite conversaciones delicadas en su presencia, como si no pudiera oírlas.',
+            'Cuide también de usted: descanse por turnos, acepte ayuda y comparta lo que siente.',
+          ] },
+        { titulo: 'Teléfonos y recursos de urgencia',
+          contenido: 'Anote los teléfonos de su equipo en el recuadro y téngalos a mano junto a la hoja de pauta y el registro de rescates. Pedir ayuda nunca es molestar.',
+          items: [
+            'Llame a su equipo (ESAD o Centro de Salud) si el dolor, la falta de aire o la agitación no ceden con el rescate, si necesita más de 3 rescates en 24 horas, si la palomita se sale o la zona se enrojece, o ante cualquier duda.',
+            'Fuera del horario de su equipo, o ante una situación urgente que no puedan controlar, llame al 112 e indique que su familiar recibe cuidados paliativos en el domicilio.',
+          ] },
+      ],
+      advertencias: [
+        AVISO_ML,
+        'No suspenda ni modifique la medicación por miedo a sus efectos: comente sus dudas con el equipo.',
+        'No fuerce la comida ni la bebida; si su familiar tose o se atraganta al tragar, no le dé nada por boca y consulte con el equipo.',
+      ],
+      telefonos: TELEFONOS_FAMILIA,
+      fuente: FUENTE_GUIAS,
+    },
+  ];
+
   return {
-    INFUSORES, FARMACOS, OPIOIDES, GUIA_PASOS, FAMILIAS, RESCATE_SC_PASOS, MENSAJE_METADONA,
+    VERSION, INFUSORES, FARMACOS, OPIOIDES, GUIA_PASOS, FAMILIAS, RESCATE_SC_PASOS, GUIAS_FAMILIA, MENSAJE_METADONA,
     round, fmt, resolverInfusor, calcularDuracion, calcularFarmaco, calcularRescate, calcularInfusor,
-    evaluarSemaforo, bloqueoMetadona, fechaLocal, convertirOpioide, fentaniloTDMasCercano, planGuiado, generarNota,
+    evaluarSemaforo, semaforoGlobal, bloqueoMetadona, fechaLocal, convertirOpioide, fentaniloTDMasCercano, planGuiado, generarNota,
   };
 });

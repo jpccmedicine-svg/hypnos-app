@@ -1,4 +1,4 @@
-/* HYPNOS v2.0 — Service Worker: caché del app shell (Local-First, 100 % offline). */
+/* HYPNOS v2.1 — Service Worker: caché del app shell (Local-First, 100 % offline). */
 const CACHE_PREFIX = 'hypnos-';
 const CACHE = CACHE_PREFIX + 'v2.1-cache';
 const SHELL = ['./', './index.html', './style.css', './engine.js', './app.js', './manifest.json', './icon.svg'];

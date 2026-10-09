@@ -1,4 +1,4 @@
-/* HYPNOS v2.0 — Interfaz y orquestación.
+/* HYPNOS v2.1 — Interfaz y orquestación.
  * En Node (require) expone el motor de cálculo para tests; en navegador monta la PWA. */
 (function () {
   'use strict';
@@ -40,11 +40,11 @@
 
   /* ───────────── Toast ───────────── */
   let toastTimer;
-  function toast(msg) {
+  function toast(msg, ms) {
     const t = $('#toast');
     t.textContent = msg; t.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
+    toastTimer = setTimeout(() => { t.hidden = true; }, ms || 2600);
   }
 
   /* ───────────── Tema ───────────── */
@@ -112,14 +112,14 @@
   }
 
   /* ───────────── Semáforo ───────────── */
-  function setAlertas(fuente, alertas) { state.alertas[fuente] = alertas; renderSemaforo(); }
+  function setAlertas(fuente, alertas) {
+    state.alertas[fuente] = alertas; renderSemaforo();
+    // La nota visible nunca debe quedar con un semáforo distinto del global.
+    if (!$('#panel-nota').hidden) actualizarNota();
+  }
+  const semaforoActual = () => H.semaforoGlobal(...Object.keys(state.alertas).map((k) => state.alertas[k]));
   function renderSemaforo() {
-    const todas = [];
-    const vistos = {};
-    Object.keys(state.alertas).forEach((k) => state.alertas[k].forEach((a) => {
-      if (!vistos[a.codigo]) { vistos[a.codigo] = 1; todas.push(a); }
-    }));
-    const nivel = todas.some((a) => a.nivel === 'rojo') ? 'rojo' : todas.length ? 'ambar' : 'verde';
+    const { nivel, alertas: todas } = semaforoActual();
     const badge = $('#semaforo-badge');
     badge.className = 'semaforo ' + nivel;
     const nombre = { rojo: 'Rojo', ambar: 'Ámbar', verde: 'Verde' }[nivel];
@@ -169,6 +169,7 @@
     let dias = null;
     if (horas != null) {
       if (Math.abs(horas - 24) < 0.5) dias = 1;
+      else if (horas >= 46 && horas <= 52) dias = 2;
       else if (horas >= 124.5 && horas <= 126.5) dias = 5;
       else if (Math.abs(horas - 168) < 0.5) dias = 7;
     }
@@ -179,7 +180,7 @@
     });
   }
   function setDuracion(dias) {
-    const map = { 1: 'dia_48', 5: 'sfs2_252', 7: 'dia_7' };
+    const map = { 1: 'dia_48', 2: 'dia_2', 5: 'sfs2_252', 7: 'dia_7' };
     const id = map[dias];
     if (!id) return;
     state.infusor = id;
@@ -307,6 +308,9 @@
     const cont = $('#guiado');
     const total = H.GUIA_PASOS.length;
     if (g.paso >= total) return renderPlan(cont);
+    // Fuera del plan no hay alertas del guiado ni plan cargable: evita alertas huérfanas al retroceder.
+    g.plan = null;
+    if (state.alertas.guiado.length) setAlertas('guiado', []);
     const p = H.GUIA_PASOS[g.paso];
     const progreso = `<div class="progreso" role="progressbar" aria-valuemin="1" aria-valuemax="${total}" aria-valuenow="${g.paso + 1}"><span style="width:${((g.paso + 1) / total) * 100}%"></span></div><p class="muted">Paso ${g.paso + 1} de ${total}</p>`;
     let cuerpo;
@@ -363,13 +367,15 @@
           const p = H.GUIA_PASOS[g.paso];
           const v = $$('input:checked', cont).map((i) => i.value);
           if (!v.length) { toast('Seleccione al menos un síntoma'); return; }
-          g.resp[p.id] = v; g.paso++; renderGuiado();
+          g.resp[p.id] = v;
+          // Sin disnea, la confirmación de midazolam para disnea deja de tener sentido.
+          if (p.id === 'sintomas' && v.indexOf('disnea') === -1) delete g.resp.midazolamDisnea;
+          g.paso++; renderGuiado();
         } else if (a === 'atras') {
           g.paso = Math.max(0, g.paso - 1);
-          if (g.paso < H.GUIA_PASOS.length) setAlertas('guiado', []);
           renderGuiado();
         } else if (a === 'reiniciar') {
-          g.paso = 0; g.resp = {}; setAlertas('guiado', []); renderGuiado();
+          g.paso = 0; g.resp = {}; renderGuiado();
         } else if (a === 'nueva') {
           nuevaConsulta(); toast('Nueva consulta: todos los campos reiniciados');
         } else if (a === 'cargar' && g.plan) {
@@ -457,9 +463,13 @@
       // Solo la conversión transferida al infusor (y aún vigente) consta en la nota; si no, prescripción manual directa.
       conversion: state.aplicada ? state.aplicada.conversion : null,
       avisoFactor: avisoAplicada(),
+      // Todas las alertas activas (infusor, guiado, opioides, conversión), no solo las del infusor.
+      alertas: semaforoActual().alertas,
     };
     $('#nota-texto').value = H.generarNota(d);
-    $('#nota-estado').textContent = state.ultimo && state.ultimo.semaforo.nivel === 'rojo' ? '⛔ Semáforo rojo: revise antes de exportar' : '';
+    const rojo = semaforoActual().nivel === 'rojo';
+    $('#nota-estado').textContent = rojo ? '⛔ Semáforo rojo: copia bloqueada hasta resolver las alertas' : '';
+    $('#nota-copiar').setAttribute('aria-disabled', String(rojo));
   }
   /* Reinicia todos los módulos para no arrastrar datos entre pacientes. */
   function nuevaConsulta() {
@@ -489,26 +499,151 @@
     });
   }
   function initNota() {
+    // Copia de solo lectura para imprimir la nota completa (un textarea se recorta al imprimir).
+    const pre = document.createElement('pre');
+    pre.id = 'nota-print'; pre.className = 'print-only nota-print';
+    $('#nota-texto').insertAdjacentElement('afterend', pre);
     $$('#panel-nota input, #panel-nota select, #panel-nota textarea:not(#nota-texto)').forEach((el) => {
       el.addEventListener('input', actualizarNota); el.addEventListener('change', actualizarNota);
     });
     $('#nota-regenerar').addEventListener('click', () => { actualizarNota(); toast('Nota regenerada'); });
     $('#nota-copiar').addEventListener('click', () => {
+      actualizarNota();
+      if (semaforoActual().nivel === 'rojo') {
+        toast('⛔ Bloqueo de seguridad: resuelva las alertas rojas antes de copiar la nota clínica a la historia', 5000);
+        return;
+      }
       copiar($('#nota-texto').value).then(() => toast('Nota copiada al portapapeles ✓'), () => toast('No se pudo copiar: seleccione y copie manualmente'));
     });
     actualizarNota();
   }
 
   /* ───────────── Tab 5 · Familias ───────────── */
+  const CABECERA_GUIAS = 'HYPNOS · Cuidados Paliativos — Guía para Familias y Cuidadores';
+  const guiaPorId = (id) => H.GUIAS_FAMILIA.find((x) => x.id === id);
+  const fechaLarga = () => new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  /* Cuerpo común de una guía (visor en pantalla y documento impreso); hs = etiqueta de los títulos de sección. */
+  function guiaCuerpo(gu, hs) {
+    const secciones = gu.secciones.map((s) => {
+      const lista = s.numerada ? 'ol' : 'ul';
+      return `<section class="guia-seccion"><${hs}>${esc(s.titulo)}</${hs}>` +
+        (s.contenido ? `<p>${esc(s.contenido)}</p>` : '') +
+        (s.destacado ? `<p class="guia-destacado">${esc(s.destacado)}</p>` : '') +
+        (s.items && s.items.length ? `<${lista} class="guia-items">${s.items.map((i) => `<li>${esc(i)}</li>`).join('')}</${lista}>` : '') +
+        '</section>';
+    }).join('');
+    const telefonos = gu.telefonos.map((t) => `<li><strong>${esc(t.servicio)}:</strong> ` +
+      (t.numero ? `<span class="tel-num">${esc(t.numero)}</span>` : '<span class="tel-hueco"><span class="sr-only">Anote aquí el número</span></span>') +
+      (t.nota ? `<small>${esc(t.nota)}</small>` : '') + '</li>').join('');
+    return `<p class="guia-intro">${esc(gu.introduccion)}</p>${secciones}
+      <section class="guia-advertencias" role="note"><${hs}>⚠️ Importante</${hs}><ul>${gu.advertencias.map((a) => `<li>${esc(a)}</li>`).join('')}</ul></section>
+      <section class="guia-telefonos"><${hs}>📞 Teléfonos de contacto</${hs}><ul>${telefonos}</ul></section>
+      <p class="guia-fuente">${esc(gu.fuente)}</p>`;
+  }
+  function sincronizarBotonesGuia() {
+    const visor = $('#guia-visor');
+    $$('[data-guia-act="ver"]').forEach((b) => {
+      const on = !visor.hidden && visor.dataset.guia === b.dataset.guia;
+      b.setAttribute('aria-expanded', String(on));
+      b.textContent = on ? '✕ Ocultar guía' : '👁️ Ver guía';
+    });
+  }
+  function mostrarGuia(id) {
+    const gu = guiaPorId(id);
+    const visor = $('#guia-visor');
+    if (!gu) return;
+    visor.dataset.guia = gu.id;
+    visor.innerHTML = `
+      <div class="guia-visor-head">
+        <div><h3 id="guia-visor-titulo">${esc(gu.titulo)}</h3><p class="guia-sub">${esc(gu.subtitulo)}</p></div>
+        <button class="btn ghost icon" type="button" data-guia-act="cerrar" aria-label="Cerrar la guía">✕</button>
+      </div>
+      ${guiaCuerpo(gu, 'h4')}
+      <div class="btn-row">
+        <button class="btn primary" type="button" data-guia-act="imprimir" data-guia="${esc(gu.id)}">🖨️ Descargar en PDF / Imprimir</button>
+        <button class="btn ghost" type="button" data-guia-act="cerrar">Cerrar guía</button>
+      </div>`;
+    visor.hidden = false;
+    sincronizarBotonesGuia();
+    visor.focus({ preventScroll: true });
+    visor.scrollIntoView({ block: 'start' });
+  }
+  function cerrarGuia() {
+    const visor = $('#guia-visor');
+    const id = visor.dataset.guia;
+    visor.hidden = true; visor.innerHTML = ''; delete visor.dataset.guia;
+    sincronizarBotonesGuia();
+    const b = $$('[data-guia-act="ver"]').find((x) => x.dataset.guia === id);
+    if (b) b.focus();
+  }
+  /* Maqueta la guía en #print-area y abre el diálogo de impresión («Guardar como PDF» para descargarla). */
+  function imprimirGuia(id) {
+    const gu = guiaPorId(id);
+    if (!gu) return;
+    $('#print-area').innerHTML = `
+      <article class="print-doc">
+        <header class="print-head">
+          <p class="print-inst">${esc(CABECERA_GUIAS)}</p>
+          <p class="print-fecha">Fecha: ${esc(fechaLarga())}</p>
+        </header>
+        <h1>${esc(gu.titulo)}</h1>
+        <p class="guia-sub">${esc(gu.subtitulo)}</p>
+        ${guiaCuerpo(gu, 'h2')}
+        <footer class="print-pie">Documento generado con HYPNOS v${esc(H.VERSION)} · Entregado por su equipo de Cuidados Paliativos.</footer>
+      </article>`;
+    document.body.classList.add('imprimiendo-guia');
+    window.print();
+  }
   function initFamilias() {
+    $('#guias-lista').innerHTML = H.GUIAS_FAMILIA.map((gu) => `
+      <article class="card guia-card">
+        <h4>${esc(gu.titulo)}</h4>
+        <p>${esc(gu.subtitulo)}</p>
+        <div class="btn-row">
+          <button class="btn ghost" type="button" data-guia-act="ver" data-guia="${esc(gu.id)}" aria-controls="guia-visor" aria-expanded="false">👁️ Ver guía</button>
+          <button class="btn primary" type="button" data-guia-act="imprimir" data-guia="${esc(gu.id)}">🖨️ Descargar en PDF / Imprimir</button>
+        </div>
+      </article>`).join('');
+    $('#panel-familias').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-guia-act]');
+      if (!b) return;
+      const a = b.dataset.guiaAct;
+      const visor = $('#guia-visor');
+      if (a === 'ver') {
+        if (!visor.hidden && visor.dataset.guia === b.dataset.guia) cerrarGuia(); else mostrarGuia(b.dataset.guia);
+      } else if (a === 'cerrar') cerrarGuia();
+      else if (a === 'imprimir') imprimirGuia(b.dataset.guia);
+    });
     $('#familias').innerHTML = H.FAMILIAS.map((f, i) => `<details class="card acordeon"${i === 0 ? ' open' : ''}><summary>${esc(f.pregunta)}</summary><p>${esc(f.respuesta)}</p></details>`).join('');
     $('#rescate-guia').innerHTML = H.RESCATE_SC_PASOS.map((p) => `<li>${esc(p)}</li>`).join('');
+  }
+
+  /* ───────────── Impresión ─────────────
+   * Guía para familias → solo #print-area. Impresión general (Ctrl+P) → panel activo legible:
+   * cabecera de Familias con fecha, nota completa y desplegables abiertos, restaurados al terminar. */
+  let desplegadosAlImprimir = [];
+  function antesDeImprimir() {
+    $('#familias-print-cabecera').innerHTML = `<p class="print-inst">${esc(CABECERA_GUIAS)}</p><p class="print-fecha">Fecha: ${esc(fechaLarga())}</p>`;
+    $('#nota-print').textContent = $('#nota-texto').value;
+    desplegadosAlImprimir = $$('main details:not([open])');
+    desplegadosAlImprimir.forEach((d) => { d.open = true; });
+  }
+  function despuesDeImprimir() {
+    desplegadosAlImprimir.forEach((d) => { d.open = false; });
+    desplegadosAlImprimir = [];
+    document.body.classList.remove('imprimiendo-guia');
+    $('#print-area').innerHTML = '';
+  }
+  function initImpresion() {
+    window.addEventListener('beforeprint', antesDeImprimir);
+    window.addEventListener('afterprint', despuesDeImprimir);
   }
 
   /* ───────────── Arranque ───────────── */
   function init() {
     initTheme(); initModo(); initTabs(); initSemaforo();
-    initInfusor(); initGuiado(); initOpioides(); initNota(); initFamilias();
+    initInfusor(); initGuiado(); initOpioides(); initNota(); initFamilias(); initImpresion();
     if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
       navigator.serviceWorker.register('sw.js').catch(() => { /* offline-first: fallo silencioso */ });
     }

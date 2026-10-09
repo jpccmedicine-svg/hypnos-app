@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>HYPNOS v2.0 · Asistente clínico de Paliativos</title>
+  <title>HYPNOS v2.1 · Asistente clínico de Paliativos</title>
   <meta name="description" content="Asistente clínico Local-First para Cuidados Paliativos y Atención al Final de la Vida.">
   <meta name="theme-color" content="#0f172a">
   <link rel="manifest" href="manifest.json">
@@ -18,7 +18,7 @@
     <div class="brand">
       <svg class="logo" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="22" fill="none" stroke="currentColor" stroke-width="3"/><path d="M30 12a14 14 0 1 0 6 20A11 11 0 0 1 30 12z" fill="currentColor"/></svg>
       <div>
-        <h1>HYPNOS <small>v2.0</small></h1>
+        <h1>HYPNOS <small>v2.1</small></h1>
         <p class="tagline">Paliativos · Local-First</p>
       </div>
     </div>
@@ -57,6 +57,7 @@
           <label class="field-label">Duración habitual</label>
           <div class="duracion-selector" role="radiogroup" aria-label="Duración del infusor">
             <button type="button" class="dur-btn" role="radio" aria-checked="false" data-dias="1">1 día</button>
+            <button type="button" class="dur-btn" role="radio" aria-checked="false" data-dias="2">2 días</button>
             <button type="button" class="dur-btn active" role="radio" aria-checked="true" data-dias="5">5 días</button>
             <button type="button" class="dur-btn" role="radio" aria-checked="false" data-dias="7">7 días</button>
           </div>
@@ -154,8 +155,18 @@
 
     <!-- TAB 5 · FAMILIAS -->
     <section id="panel-familias" role="tabpanel" aria-labelledby="tab-familias" class="panel" hidden>
+      <header id="familias-print-cabecera" class="print-cabecera print-only"></header>
       <h2>Guía y apoyo a familias</h2>
-      <p class="lead">Respuestas claras y cálidas a los miedos más frecuentes. Léalas o compártalas con la familia.</p>
+      <p class="lead">Guías imprimibles y respuestas claras y cálidas a los miedos más frecuentes. Léalas o compártalas con la familia.</p>
+
+      <section class="guias-familia" aria-labelledby="guias-titulo">
+        <h3 id="guias-titulo">📄 Guías para familias y cuidadores <span class="guias-sello">Recomendaciones SECPAL</span></h3>
+        <p class="muted">Para leer en pantalla o entregar en papel. Para descargar el PDF, elija «Guardar como PDF» como destino en el diálogo de impresión.</p>
+        <div id="guias-lista" class="guias-grid"></div>
+      </section>
+      <article id="guia-visor" class="card guia-visor" hidden tabindex="-1" aria-labelledby="guia-visor-titulo"></article>
+
+      <h3 class="section-title">Preguntas frecuentes</h3>
       <div id="familias"></div>
       <h3 class="section-title">Guía de rescate subcutáneo</h3>
       <div class="card"><ol id="rescate-guia" class="steps"></ol>
@@ -164,11 +175,14 @@
   </main>
 
   <footer class="footer">
-    <p class="muted"><strong>HYPNOS v2.0</strong> · Herramienta Local-First de apoyo a la decisión clínica en Cuidados Paliativos.</p>
+    <p class="muted"><strong>HYPNOS v2.1</strong> · Herramienta Local-First de apoyo a la decisión clínica en Cuidados Paliativos.</p>
     <p class="muted legal"><small>No sustituye el juicio facultativo ni la comprobación de dosis y compatibilidades antes de la administración.</small></p>
   </footer>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <!-- Documento de impresión / PDF de una guía para familias (solo visible al imprimir) -->
+  <div id="print-area" class="print-area"></div>
 
   <script src="engine.js"></script>
   <script src="app.js"></script>

@@ -53,7 +53,7 @@ test('rescate = 1/6 de 60 mg = 10 mg (0.5 ml de ampolla 2%)', () => {
 });
 test('semáforo verde', () => assert.strictEqual(testigo.semaforo.nivel, 'verde'));
 
-console.log('\nSelector de duración rápida: 1 día / 5 días / 7 días (morfina 60 mg/día)');
+console.log('\nSelector de duración rápida: 1 día / 2 días / 5 días / 7 días (morfina 60 mg/día)');
 test('1 día (dia_48, 48 ml @ 2 ml/h): 24 h, 60 mg totales, 3 ml a aspirar', () => {
   const r = H.calcularInfusor({ infusor: 'dia_48', farmacos: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }] });
   cerca(r.horas, 24); cerca(r.dias, 1);
@@ -64,6 +64,23 @@ test('5 días (sfs2_252, 126 h reales): 315 mg totales, 15.75 ml a aspirar', () 
   const r = H.calcularInfusor({ infusor: 'sfs2_252', farmacos: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }] });
   cerca(r.horas, 126); cerca(r.dias, 5.25);
   cerca(r.farmacos[0].totalMg, 315); cerca(r.farmacos[0].volumenAspirar, 15.75);
+});
+test('Infusor 2 días (dia_2, 100 ml @ 2 ml/h) → 50 h / 2,08 días', () => {
+  const d = H.calcularDuracion('dia_2');
+  cerca(d.horas, 50); cerca(d.dias, 50 / 24); cerca(H.round(d.dias, 2), 2.08);
+  assert.strictEqual(d.infusor.llenado, 100); assert.strictEqual(d.infusor.volumenReal, 100);
+  assert.ok(d.horas >= 46 && d.horas <= 52, 'dentro del rango que activa el botón «2 días»');
+});
+test('2 días (dia_2, 50 h): 125 mg totales, 4 ampollas, 6,25 ml a aspirar, 93,75 ml de suero, verde', () => {
+  const r = H.calcularInfusor({ infusor: 'dia_2', farmacos: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }] });
+  const f = r.farmacos[0];
+  cerca(r.horas, 50); cerca(r.dias, 50 / 24);
+  cerca(f.totalMg, 125); assert.strictEqual(f.ampollas, 4);
+  cerca(f.volumenAspirar, 6.25); cerca(f.volumenSobrante, 1.75);
+  cerca(r.volumenAspirado, 6.25); cerca(r.suero, 93.75); cerca(r.volumenFinal, 100);
+  assert.strictEqual(r.volumenExcedido, false);
+  cerca(f.rescate.mgMin, 10); cerca(f.rescate.mlMin, 0.5);
+  assert.strictEqual(r.semaforo.nivel, 'verde');
 });
 test('7 días (dia_7, 168 h exactas): 420 mg totales, 21 ml a aspirar, 229 ml de suero', () => {
   const r = H.calcularInfusor({ infusor: 'dia_7', farmacos: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }] });
@@ -254,6 +271,81 @@ test('opioide previo: advertencia de no iniciar morfina naïve', () => {
 test('apoyo a familias', () => {
   assert.ok(H.FAMILIAS.some((f) => /matar/.test(f.pregunta)));
   assert.ok(H.FAMILIAS.some((f) => /ahoga/.test(f.pregunta)));
+});
+
+console.log('\nGuías imprimibles para familias (SECPAL)');
+test('versión 2.1', () => assert.strictEqual(H.VERSION, '2.1'));
+test('3 guías con los IDs esperados', () => {
+  assert.ok(Array.isArray(H.GUIAS_FAMILIA));
+  assert.deepStrictEqual(H.GUIAS_FAMILIA.map((g) => g.id), ['rescate_sc', 'sintomas_domicilio', 'ultimos_dias']);
+});
+test('cada guía tiene título, subtítulo, introducción, secciones, advertencias, teléfonos y fuente', () => {
+  const texto = (v) => typeof v === 'string' && v.trim().length > 0;
+  H.GUIAS_FAMILIA.forEach((g) => {
+    ['titulo', 'subtitulo', 'introduccion', 'fuente'].forEach((k) => assert.ok(texto(g[k]), g.id + '.' + k));
+    assert.ok(Array.isArray(g.secciones) && g.secciones.length >= 3, g.id + '.secciones');
+    g.secciones.forEach((s, i) => {
+      assert.ok(texto(s.titulo), g.id + ' sección ' + i + ' sin título');
+      assert.ok(texto(s.contenido) || texto(s.destacado) || (Array.isArray(s.items) && s.items.length), g.id + ' sección ' + i + ' vacía');
+    });
+    assert.ok(Array.isArray(g.advertencias) && g.advertencias.length && g.advertencias.every(texto), g.id + '.advertencias');
+    assert.ok(Array.isArray(g.telefonos) && g.telefonos.length && g.telefonos.every((t) => texto(t.servicio)), g.id + '.telefonos');
+    assert.ok(g.telefonos.some((t) => t.numero === '112'), g.id + ' sin 112');
+    assert.ok(/SECPAL/.test(g.fuente), g.id + ' sin referencia SECPAL');
+  });
+});
+test('advertencias incluyen el aviso obligatorio: dosis en ml, nunca en mg', () => {
+  H.GUIAS_FAMILIA.forEach((g) => {
+    assert.ok(g.advertencias.some((a) => /\bml\b/.test(a) && /mililitros/i.test(a) && /nunca administre una dosis expresada solo en mg/i.test(a)), g.id);
+  });
+});
+test('las guías no indican dosis en mg a la familia', () => {
+  H.GUIAS_FAMILIA.forEach((g) => assert.ok(!/\d\s*mg\b/i.test(JSON.stringify(g)), g.id));
+});
+const seccionGuia = (id, re) => H.GUIAS_FAMILIA.find((g) => g.id === id).secciones.find((s) => re.test(s.titulo));
+test('rescate SC: comprobación obligatoria de presentación y concentración de la ampolla/vial frente a la pauta', () => {
+  const s = seccionGuia('rescate_sc', /Comprobación obligatoria/);
+  assert.ok(s, 'sección de comprobación obligatoria');
+  assert.ok(/concentración/i.test(s.destacado) && /hoja de pauta/.test(s.destacado), 'destacado');
+  assert.ok(s.items.some((i) => /presentación/i.test(i) && /concentración/i.test(i) && /ampolla/.test(i) && /vial/.test(i) &&
+    /coincid/.test(i) && /hoja de pauta/.test(i) && /llame al equipo/i.test(i)), 'ítem de presentación/concentración');
+});
+test('estertores: matizado (habitualmente sin ahogo en agonía) y vigilancia de signos de incomodidad', () => {
+  const s = seccionGuia('sintomas_domicilio', /Estertores/);
+  assert.ok(/habitualmente no/i.test(s.destacado) && /agonía/.test(s.destacado), 'matización SECPAL/NICE');
+  assert.ok(!/no le provocan asfixia ni sufrimiento/.test(s.destacado), 'sin afirmación absoluta');
+  const texto = [s.destacado].concat(s.items).join(' ');
+  assert.ok(/expresión facial|cara/.test(texto) && /gestos/.test(texto) && /incomodidad/.test(texto), 'vigilar expresión y gestos');
+  assert.ok(s.items.some((i) => /expresión facial/.test(i) && /consulte con el equipo/.test(i)), 'consultar al equipo');
+});
+
+console.log('\nSemáforo global y nota clínica');
+const ALERTA_METADONA = H.bloqueoMetadona();
+const ALERTA_ERC = H.planGuiado({ renal: 'grave' }).semaforo.alertas.find((a) => a.codigo === 'ERC_GRAVE');
+test('semaforoGlobal: une módulos, deduplica por código y rojo prevalece', () => {
+  const s = H.semaforoGlobal([ALERTA_ERC], [ALERTA_METADONA], [ALERTA_METADONA], null);
+  assert.strictEqual(s.nivel, 'rojo'); assert.deepStrictEqual(s.alertas.map((a) => a.codigo), ['ERC_GRAVE', 'METADONA']);
+  assert.strictEqual(H.semaforoGlobal([ALERTA_ERC]).nivel, 'ambar');
+  assert.strictEqual(H.semaforoGlobal([], []).nivel, 'verde');
+});
+test('nota: alerta de metadona de otro módulo consta como alerta roja aunque el infusor esté en verde', () => {
+  const n = H.generarNota({ infusor: testigo, alertas: [ALERTA_METADONA] });
+  assert.ok(/SEMÁFORO CLÍNICO GLOBAL: ROJO/.test(n)); assert.ok(/⛔ ALERTA ROJA ACTIVA \(METADONA\)/.test(n));
+  assert.ok(/\[ROJO\] METADONA: /.test(n)); assert.ok(/SEMÁFORO DEL INFUSOR: VERDE/.test(n));
+});
+test('nota: ERC grave del modo guiado consta como alerta ámbar', () => {
+  const n = H.generarNota({ alertas: [ALERTA_ERC] });
+  assert.ok(/SEMÁFORO CLÍNICO GLOBAL: AMBAR/.test(n)); assert.ok(/\[AMBAR\] ERC_GRAVE: .*M3G\/M6G/.test(n));
+  assert.ok(!/ALERTA ROJA/.test(n));
+});
+test('nota: volumen excedido del infusor consta como alerta roja aunque no se pase en d.alertas', () => {
+  const r = H.calcularInfusor({ infusor: 'dia_48', farmacos: [{ farmaco: 'morfina', presentacion: 'morfina_1', dosisDiaria: 1200 }] });
+  const n = H.generarNota({ infusor: r, alertas: [] });
+  assert.ok(/SEMÁFORO CLÍNICO GLOBAL: ROJO/.test(n)); assert.ok(/⛔ ALERTA ROJA ACTIVA \(VOLUMEN_EXCEDIDO\)/.test(n));
+});
+test('nota: sin alertas → semáforo global verde con aviso de validación', () => {
+  const n = H.generarNota({ infusor: testigo, alertas: [] });
+  assert.ok(/SEMÁFORO CLÍNICO GLOBAL: VERDE — sin alertas automáticas \(requiere validación del prescriptor\)/.test(n));
 });
 
 console.log('\n' + pasados + ' pasados, ' + fallos.length + ' fallidos');
