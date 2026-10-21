@@ -57,14 +57,14 @@ test('Infusores 2 días: B. Braun Easypump II LT 100-50-S ref. 4540016 (100 ml @
   assert.strictEqual(b2.infusor.referenciaFabricante, '2C4711K');
   assert.strictEqual(b2.infusor.llenado, 120);
 });
-test('Infusor 7 días Baxter Seven Day LV1.5 ref. 2C1087KP: 252 ml @ 1,5 ml/h → 168 h / 7,00 días exactos con coherencia llenado === volumenReal === 252 ml', () => {
+test('Infusor 7 días Baxter Seven Day LV1.5 ref. 2C1087KP: 250 ml @ 1,5 ml/h → 166,67 h (~7 días) con coherencia llenado === volumenReal === 250 ml (Corrección 12)', () => {
   const d = H.calcularDuracion('dia_7');
-  cerca(d.horas, 168); cerca(d.dias, 7);
+  cerca(d.horas, 166.66666666666666); cerca(d.dias, 166.66666666666666 / 24);
   assert.strictEqual(d.infusor.referenciaFabricante, '2C1087KP');
-  assert.strictEqual(d.infusor.llenado, 252);
+  assert.strictEqual(d.infusor.llenado, 250);
   assert.strictEqual(d.infusor.llenadoMin, 227);
   assert.strictEqual(d.infusor.maxLlenado, 300);
-  assert.strictEqual(d.infusor.volumenReal, 252);
+  assert.strictEqual(d.infusor.volumenReal, 250);
 });
 test('Modelos heredados de v2.1 con catalogación errónea o incoherente están explícitamente bloqueados (baxter_2c1009k LV5, sfs2_252, dia_60)', () => {
   assert.ok(H.INFUSORES_BLOQUEADOS.baxter_2c1009k, 'baxter_2c1009k registrado en INFUSORES_BLOQUEADOS');
@@ -156,13 +156,15 @@ test('2 días (dia_2, 100 ml @ 2 ml/h = 50 h): 125 mg totales, 4 ampollas, 6,25 
   assert.strictEqual(r.volumenExcedido, false);
   assert.strictEqual(r.semaforo.nivel, 'verde');
 });
-test('7 días (dia_7, 252 ml @ 1,5 ml/h = 168 h exactas): 420 mg totales, 21 ml a añadir, 231 ml de suero, volumenFinal = 252 ml (concentración exacta)', () => {
+test('7 días (dia_7, 250 ml @ 1,5 ml/h = 166,67 h / ~7 días): 416,67 mg totales, 20,83 ml a añadir, 229,17 ml de suero, volumenFinal = 250 ml (Corrección 12)', () => {
   const r = H.calcularInfusor({ infusor: 'dia_7', farmacos: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }] });
-  cerca(r.horas, 168); cerca(r.dias, 7);
-  cerca(r.farmacos[0].totalMg, 420); cerca(r.farmacos[0].volumenAspirar, 21);
-  cerca(r.suero, 231); cerca(r.volumenFinal, 252);
+  cerca(r.horas, 166.66666666666666); cerca(r.dias, 166.66666666666666 / 24);
+  cerca(r.farmacos[0].totalMg, 60 * (166.66666666666666 / 24));
+  cerca(r.farmacos[0].volumenAspirar, (60 * (166.66666666666666 / 24)) / 20);
+  cerca(r.suero, 250 - r.farmacos[0].volumenAspirar);
+  cerca(r.volumenFinal, 250);
   const entregaDiaria = (r.farmacos[0].totalMg / r.volumenFinal) * r.infusor.ritmo * 24;
-  cerca(entregaDiaria, 60, '7 días 252 ml @ 1,5 ml/h entrega exactamente 60 mg/24 h sin error de dilución');
+  cerca(entregaDiaria, 60, '7 días 250 ml @ 1,5 ml/h entrega exactamente 60 mg/24 h sin error de dilución');
 });
 
 console.log('\nFármacos, presentaciones y precisión de volúmenes pequeños (HYP-004)');
@@ -499,7 +501,7 @@ test('ERC grave no sugiere morfina', () => {
 });
 test('HYP-005: nota clínica incluye resumen del infusor actual (fármacos, dosis/base temporal, volúmenes, diluyente, volumen final, duración, caudal/dispositivo)', () => {
   const n = H.generarNota({ infusor: testigo });
-  assert.ok(/NOTA CLÍNICA · INFUSOR ACTUAL \(Hypnos 2\.2\)/.test(n));
+  assert.ok(/NOTA CLÍNICA · INFUSOR ACTUAL \(Hypnos (2\.2|2\.3)\)/.test(n));
   assert.ok(/Dispositivo: Surefuser™\+ SFS-2-25P-EJ · 250 ml @ 2 ml\/h \(125 h\)/.test(n));
   assert.ok(/Duración: 125 h \(5,21 días\) · Caudal: 2 ml\/h/.test(n));
   assert.ok(/Llenado nominal: 250 ml/.test(n));
@@ -581,8 +583,8 @@ test('apoyo a familias', () => {
 });
 
 console.log('\nHYP-006 y Guías imprimibles para familias (SECPAL)');
-test('HYP-006: versión 2.2, autoría "JP" (mostrada como "by JP") y contacto jpccmedicine@gmail.com', () => {
-  assert.strictEqual(H.VERSION, '2.2');
+test('HYP-006 / HYPNOS 2.3: versión 2.3, autoría "JP" (mostrada como "by JP") y contacto jpccmedicine@gmail.com', () => {
+  assert.strictEqual(H.VERSION, '2.3');
   assert.strictEqual(H.AUTOR, 'JP');
   assert.strictEqual(H.CONTACTO_EMAIL, 'jpccmedicine@gmail.com');
   assert.ok(H.FUENTES_CLINICAS && H.FUENTES_CLINICAS.aemps_fentanilo_69733);
@@ -639,6 +641,110 @@ test('semaforoGlobal: une módulos, deduplica por código y rojo prevalece', () 
   assert.strictEqual(s.nivel, 'rojo'); assert.deepStrictEqual(s.alertas.map((a) => a.codigo), ['ERC_GRAVE', 'METADONA']);
   assert.strictEqual(H.semaforoGlobal([ALERTA_ERC]).nivel, 'ambar');
   assert.strictEqual(H.semaforoGlobal([], []).nivel, 'verde');
+});
+
+
+console.log('\nPruebas específicas de las 12 Correcciones (HYPNOS 2.3)');
+
+test('Corrección 1: Desglose matemático explícito de operaciones en fármaco e infusor', () => {
+  const r = H.calcularInfusor({
+    infusor: 'dia_2',
+    farmacos: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }],
+  });
+  const f = r.farmacos[0];
+  assert.ok(f.operaciones, 'f.operaciones presente');
+  assert.ok(/40 mg \/ 2 ml = 20 mg\/ml/.test(f.operaciones.concentracion));
+  assert.ok(/60 mg\/día × 2,08 días = 125 mg/.test(f.operaciones.dosisAcumulada));
+  assert.ok(/125 mg ÷ 20 mg\/ml = 6,25 ml/.test(f.operaciones.volumenAspirar));
+  assert.ok(/ceil\(6,25 ml ÷ 2 ml\) = 4 ampollas/.test(f.operaciones.ampollas));
+  assert.ok(/4 × 2 ml = 8 ml/.test(f.operaciones.volumenEnvases));
+  assert.ok(/8 ml - 6,25 ml = 1,75 ml/.test(f.operaciones.sobrante));
+
+  assert.ok(r.operaciones, 'r.operaciones presente');
+  assert.ok(/100 ml ÷ 2 ml\/h = 50 h/.test(r.operaciones.duracion));
+  assert.ok(/Σ volúmenes de fármacos = 6,25 ml/.test(r.operaciones.volumenFarmacos));
+  assert.ok(/100 ml \(llenado\) - 6,25 ml \(fármacos\) = 93,75 ml/.test(r.operaciones.diluyente));
+  assert.ok(/6,25 ml \(fármacos\) \+ 93,75 ml \(suero\) = 100 ml/.test(r.operaciones.volumenFinal));
+});
+
+test('Corrección 3: Constructor vacío calcula correctamente estado sin fármacos precargados', () => {
+  const vacio = H.calcularInfusor({ infusor: 'dia_48', farmacos: [] });
+  assert.strictEqual(vacio.farmacos.length, 0);
+  assert.strictEqual(vacio.volumenAspirado, 0);
+  assert.strictEqual(vacio.suero, 48);
+  assert.strictEqual(vacio.volumenFinal, 48);
+  assert.strictEqual(vacio.volumenExcedido, false);
+  assert.strictEqual(vacio.semaforo.nivel, 'verde');
+  assert.ok(/0 ml/.test(vacio.operaciones.volumenFarmacos));
+});
+
+test('Corrección 6: Modo Guiado incluye opción «refractario» con recomendaciones SECPAL', () => {
+  const p1 = H.GUIA_PASOS.find((p) => p.id === 'contexto');
+  assert.ok(p1.opciones.some((o) => o.valor === 'refractario'), 'opción refractario en paso 1');
+  const plan = H.planGuiado({ contexto: 'refractario', via: 'sc', sintomas: ['dolor'] });
+  assert.ok(plan.medidas.some((m) => /refractariedad/i.test(m)), 'medida sobre refractariedad presente');
+  assert.ok(plan.medidas.some((m) => /Paliativos/i.test(m)), 'recomendación de interconsulta');
+});
+
+test('Corrección 8: Catálogo farmacológico auditado y ketorolaco trometamol CIMA 70102 bloqueado', () => {
+  assert.ok(H.CATALOGO_FARMACOLOGICO_AUDITADO, 'CATALOGO_FARMACOLOGICO_AUDITADO definido');
+  const keto = H.CATALOGO_FARMACOLOGICO_AUDITADO.ketorolaco;
+  assert.ok(keto, 'ketorolaco presente en auditoría');
+  assert.strictEqual(keto.cima[0], '70102');
+  assert.deepStrictEqual(keto.viasAprobadas, ['IV', 'IM']);
+  assert.strictEqual(keto.viaSubcutaneaAprobada, false);
+  assert.strictEqual(keto.duracionMaximaParenteralDias, 2);
+  assert.strictEqual(keto.estadoInfusor, 'bloqueado_sc_offlabel');
+  assert.strictEqual(keto.pendienteValidacionClinica, true);
+  assert.ok(/off-label/i.test(keto.motivoBloqueo));
+  assert.strictEqual(H.FARMACOS.ketorolaco, undefined, 'ketorolaco NO debe estar en FARMACOS activos');
+});
+
+test('Corrección 9: Escala de Sedación de Ramsay (6 niveles y evaluación clínica sin prescripción automática)', () => {
+  assert.ok(H.ESCALA_RAMSAY, 'ESCALA_RAMSAY definida');
+  assert.strictEqual(H.ESCALA_RAMSAY.niveles.length, 6, '6 niveles en Ramsay');
+  assert.ok(/BMJ 1974/i.test(H.ESCALA_RAMSAY.fuente), 'cita original BMJ 1974');
+  assert.ok(/NO determina por sí sola la indicación/i.test(H.ESCALA_RAMSAY.advertenciaClinica), 'advertencia clínica obligatoria');
+
+  const rEnObj = H.evaluarRamsay({ nivelObservado: 3, nivelObjetivo: 3 });
+  assert.strictEqual(rEnObj.valido, true);
+  assert.strictEqual(rEnObj.concordancia, 'en_objetivo');
+  assert.strictEqual(rEnObj.itemObservado.titulo, 'Nivel 3: Dormido; responde solo a órdenes verbales simples');
+
+  const rInfra = H.evaluarRamsay({ nivelObservado: 2, nivelObjetivo: 4 });
+  assert.strictEqual(rInfra.concordancia, 'infrasedacion');
+  const rSobre = H.evaluarRamsay({ nivelObservado: 6, nivelObjetivo: 4 });
+  assert.strictEqual(rSobre.concordancia, 'sobresedacion');
+
+  assert.strictEqual(H.evaluarRamsay({ nivelObservado: 0 }).valido, false);
+  assert.strictEqual(H.evaluarRamsay({ nivelObservado: 7 }).valido, false);
+  assert.strictEqual(H.evaluarRamsay({ nivelObservado: 3, nivelObjetivo: 8 }).valido, false);
+
+  const rDoc = H.evaluarRamsay({
+    nivelObservado: 4,
+    nivelObjetivo: 4,
+    preferenciasPaciente: 'Prioriza confort y estar libre de dolor sobre lucidez continua',
+    voluntadesAnticipadas: true,
+    representanteLegal: true,
+    consentimientoDocumentado: true,
+  });
+  assert.strictEqual(rDoc.voluntadesAnticipadas, true);
+  assert.strictEqual(rDoc.representanteLegal, true);
+  assert.strictEqual(rDoc.consentimientoDocumentado, true);
+  assert.ok(/libre de dolor/i.test(rDoc.preferenciasPaciente));
+});
+
+test('Corrección 12: Eliminación total de capacidad 252 ml y bloqueo en catálogo', () => {
+  Object.keys(H.INFUSORES).forEach((k) => {
+    assert.notStrictEqual(H.INFUSORES[k].llenado, 252, `${k} llenado != 252`);
+    assert.notStrictEqual(H.INFUSORES[k].volumenReal, 252, `${k} volumenReal != 252`);
+  });
+  assert.ok(H.INFUSORES_BLOQUEADOS.capacidad_252, 'capacidad_252 en INFUSORES_BLOQUEADOS');
+  const d7 = H.INFUSORES.dia_7;
+  assert.strictEqual(d7.llenado, 250);
+  assert.strictEqual(d7.volumenReal, 250);
+  assert.strictEqual(d7.ritmo, 1.5);
+  cerca(d7.volumenReal / d7.ritmo, 166.66666666666666);
 });
 
 console.log('\n' + pasados + ' pasados, ' + fallos.length + ' fallidos');

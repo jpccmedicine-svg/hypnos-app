@@ -1,4 +1,4 @@
-/* HYPNOS 2.2 — Interfaz y orquestación.
+/* HYPNOS 2.3 — Interfaz y orquestación.
  * En Node (require) expone el motor de cálculo para tests; en navegador monta la PWA. */
 (function () {
   'use strict';
@@ -12,18 +12,28 @@
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
   const fmt = H.fmt;
+  const round = H.round;
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   const state = {
     modo: 'sencillo',
     diasSeleccionados: 5, // 1 | 2 | 4 | 5 | 7 | 'custom'
     infusor: 'sfs2_250',
-    rows: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }],
+    rows: [], // Corrección 3: Abre vacío por defecto (sin precargar midazolam ni morfina)
     parchesFentanilo: [{ parche: 25, cantidad: 1 }],
     ultimo: null, // último resultado de infusor
     conversion: null, // última conversión de opioides
     aplicada: null, // conversión transferida al infusor: { dosis, nombre, verificar, conversion }
     alertas: { infusor: [], opioide: [], guiado: [], conversion: [] },
+    ramsay: {
+      nivelObservado: null,
+      nivelObjetivo: null,
+      preferencias: '',
+      voluntadesAnticipadas: false,
+      representanteLegal: false,
+      consentimientoDocumentado: false,
+      reevaluacionConfort: '',
+    },
   };
 
   /* Las advertencias de conversión viajan con la dosis aplicada: solo se retiran
@@ -75,15 +85,14 @@
     toastTimer = setTimeout(() => { t.hidden = true; }, ms || 2600);
   }
 
-  /* ───────────── Identidad, Versión y Contacto (HYP-006) ───────────── */
+  /* ───────────── Identidad, Versión y Contacto (Corrección 4) ───────────── */
   function initIdentidadContacto() {
     const verEl = $('#app-version');
     const footVerEl = $('#footer-version');
-    const authorEl = $('#app-author');
     if (verEl) verEl.textContent = H.VERSION;
     if (footVerEl) footVerEl.textContent = H.VERSION;
-    if (authorEl) authorEl.textContent = 'by ' + H.AUTOR;
-    document.title = 'Hypnos ' + H.VERSION + ' by ' + H.AUTOR + ' · Asistente clínico de Paliativos';
+    // By JP solamente en el pie de página de forma discreta
+    document.title = 'Hypnos ' + H.VERSION + ' · Asistente clínico de Cuidados Paliativos';
 
     const link = $('#contacto-mailto');
     if (link) {
@@ -105,7 +114,7 @@
   function setTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     try { localStorage.setItem('hypnos-theme', theme); } catch (e) { /* modo privado */ }
-    $('meta[name="theme-color"]').setAttribute('content', theme === 'dark' ? '#020617' : '#0f172a');
+    $('meta[name="theme-color"]').setAttribute('content', theme === 'dark' ? '#090d16' : '#0f172a');
     $('#theme-toggle').setAttribute('aria-label', theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
     $('#theme-icon').setAttribute('d', theme === 'dark'
       ? 'M12 4V2m0 20v-2M4 12H2m20 0h-2M5.6 5.6 4.2 4.2m15.6 15.6-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z'
@@ -122,12 +131,11 @@
   /* ───────────── Modo Sencillo / Experto ───────────── */
   function setModo(modo) {
     state.modo = modo;
-    try { localStorage.setItem('hypnos-modo', modo); } catch (e) { /* modo privado */ }
+    try { localStorage.setItem('hypnos-modo', modo); } catch (e) { /* noop */ }
     document.body.setAttribute('data-modo', modo);
     const bS = $('#btn-modo-sencillo'), bE = $('#btn-modo-experto');
     if (bS) { bS.classList.toggle('active', modo === 'sencillo'); bS.setAttribute('aria-checked', String(modo === 'sencillo')); }
     if (bE) { bE.classList.toggle('active', modo === 'experto'); bE.setAttribute('aria-checked', String(modo === 'experto')); }
-    // Si vuelve a modo sencillo desde 4 días o personalizado, ajustar a 5 días por defecto
     if (modo === 'sencillo' && (state.diasSeleccionados === 'custom' || state.diasSeleccionados === 4)) {
       state.diasSeleccionados = 5;
       state.infusor = 'sfs2_250';
@@ -149,77 +157,100 @@
   }
 
   /* ───────────── Pestañas ───────────── */
-  function switchTab(id, focus) {
-    $$('[role="tab"]').forEach((b) => {
+  function switchTab(id) {
+    $$('.tabs button').forEach((b) => {
       const on = b.dataset.tab === id;
-      b.setAttribute('aria-selected', on);
-      b.tabIndex = on ? 0 : -1;
-      if (on && focus) b.focus();
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', String(on));
+      b.setAttribute('tabindex', on ? '0' : '-1');
     });
-    $$('[role="tabpanel"]').forEach((p) => { p.hidden = p.id !== 'panel-' + id; });
+    $$('.panel').forEach((p) => {
+      const match = p.id === 'panel-' + id;
+      p.hidden = !match;
+      p.classList.toggle('active', match);
+    });
     if (id === 'nota') actualizarNota();
-    window.scrollTo({ top: 0 });
   }
   function initTabs() {
-    const tabs = $$('[role="tab"]');
-    tabs.forEach((b, i) => {
-      b.addEventListener('click', () => switchTab(b.dataset.tab));
-      b.addEventListener('keydown', (e) => {
-        let n = null;
-        if (e.key === 'ArrowRight') n = (i + 1) % tabs.length;
-        else if (e.key === 'ArrowLeft') n = (i - 1 + tabs.length) % tabs.length;
-        else if (e.key === 'Home') n = 0;
-        else if (e.key === 'End') n = tabs.length - 1;
-        if (n !== null) { e.preventDefault(); switchTab(tabs[n].dataset.tab, true); }
-      });
-    });
+    $$('.tabs button').forEach((b) => b.addEventListener('click', () => switchTab(b.dataset.tab)));
   }
 
-  /* ───────────── Semáforo ───────────── */
-  function setAlertas(fuente, alertas) {
-    state.alertas[fuente] = alertas; renderSemaforo();
-    if (!$('#panel-nota').hidden) actualizarNota();
+  /* ───────────── Semáforo clínico integrado ───────────── */
+  function semaforoActual() {
+    return H.semaforoGlobal(
+      state.alertas.infusor,
+      state.alertas.opioide,
+      state.alertas.guiado,
+      state.alertas.conversion
+    );
   }
-  const semaforoActual = () => H.semaforoGlobal(...Object.keys(state.alertas).map((k) => state.alertas[k]));
-  function renderSemaforo() {
-    const { nivel, alertas: todas } = semaforoActual();
+  function actualizarSemaforoUI() {
+    const s = semaforoActual();
     const badge = $('#semaforo-badge');
-    badge.className = 'semaforo ' + nivel;
-    const nombre = { rojo: 'Rojo', ambar: 'Ámbar', verde: 'Verde' }[nivel];
-    $('#semaforo-label').textContent = todas.length
-      ? nombre + ' · ' + todas.length + (todas.length === 1 ? ' alerta' : ' alertas')
-      : 'Sin alertas automáticas';
-    const panel = $('#semaforo-panel');
-    panel.className = 'semaforo-panel ' + nivel;
-    panel.innerHTML = todas.length
-      ? todas.map((a) => `<div class="alert ${a.nivel}" role="alert"><strong>${a.nivel === 'rojo' ? '⛔ Alerta roja' : '⚠️ Precaución'}</strong><p>${esc(a.mensaje)}</p></div>`).join('')
-      : '<div class="alert verde"><strong>Sin alertas automáticas detectadas · Requiere validación del prescriptor</strong><p>Las comprobaciones automáticas son limitadas: la revisión clínica sigue siendo imprescindible.</p></div>';
+    badge.className = 'semaforo ' + s.nivel;
+    const txts = {
+      verde: 'Sin alertas detectadas',
+      ambar: s.alertas.length === 1 ? '1 precaución clínica' : s.alertas.length + ' precauciones',
+      rojo: s.alertas.length === 1 ? '1 bloqueo de seguridad' : s.alertas.length + ' bloqueos',
+    };
+    $('#semaforo-label').textContent = txts[s.nivel];
+    actualizarPanelSemaforo();
+  }
+  function setAlertas(modulo, lista) {
+    state.alertas[modulo] = lista || [];
+    actualizarSemaforoUI();
+  }
+  function actualizarPanelSemaforo() {
+    const s = semaforoActual();
+    const p = $('#semaforo-panel');
+    if (s.alertas.length === 0) {
+      p.innerHTML = `<div class="card"><p class="muted"><strong>Semáforo en verde:</strong> No se han detectado incompatibilidades ni alertas automáticas. Toda prescripción debe ser revisada y validada por el facultativo responsable.</p></div>`;
+      return;
+    }
+    const items = s.alertas.map((a) => `
+      <div class="alert ${a.nivel}">
+        <strong>${a.nivel === 'rojo' ? '⛔ Bloqueo' : '⚠️ Precaución'}${a.titulo ? ': ' + esc(a.titulo) : ''}</strong>
+        <p>${esc(a.mensaje)}</p>
+      </div>`).join('');
+    p.innerHTML = items;
   }
   function initSemaforo() {
-    const badge = $('#semaforo-badge');
-    badge.addEventListener('click', () => {
-      const panel = $('#semaforo-panel');
-      panel.hidden = !panel.hidden;
-      badge.setAttribute('aria-expanded', String(!panel.hidden));
+    $('#semaforo-badge').addEventListener('click', () => {
+      const p = $('#semaforo-panel');
+      const expandido = !p.hidden;
+      p.hidden = expandido;
+      $('#semaforo-badge').setAttribute('aria-expanded', String(!expandido));
     });
-    renderSemaforo();
   }
 
-  /* ───────────── Tab 1 · Infusor (HYP-002, HYP-003, HYP-004) ───────────── */
+  /* ───────────── Tab 1 · Infusor ───────────── */
   function opcionesFarmaco(sel) {
     return Object.keys(H.FARMACOS).map((k) => `<option value="${k}"${k === sel ? ' selected' : ''}>${esc(H.FARMACOS[k].nombre)}</option>`).join('');
   }
   function opcionesPres(farmaco, sel) {
     return H.FARMACOS[farmaco].presentaciones.map((p) => `<option value="${p.id}"${p.id === sel ? ' selected' : ''}>${esc(p.label)}</option>`).join('');
   }
+
+  /* Corrección 3: Visualización de estado vacío cuando no hay medicamentos */
   function renderRows() {
-    $('#farmacos-list').innerHTML = state.rows.map((r, i) => `
+    const cont = $('#farmacos-list');
+    if (!state.rows || state.rows.length === 0) {
+      cont.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon" aria-hidden="true">💊</div>
+          <p class="empty-title">Constructor de infusor vacío</p>
+          <p class="muted">No hay medicamentos seleccionados en el infusor. Pulse <strong>«＋ Añadir fármaco»</strong> para incorporar la medicación necesaria.</p>
+        </div>`;
+      return;
+    }
+
+    cont.innerHTML = state.rows.map((r, i) => `
       <div class="fila" data-i="${i}">
         <div><label>Fármaco</label><select data-f="farmaco">${opcionesFarmaco(r.farmaco)}</select></div>
         <div class="fila-pres"><label>Presentación</label><select data-f="presentacion">${opcionesPres(r.farmaco, r.presentacion)}</select></div>
-        <div><label>Dosis diaria (mg/día)</label><input data-f="dosisDiaria" type="number" inputmode="decimal" min="0" step="any" value="${esc(r.dosisDiaria)}"></div>
+        <div><label>Dosis diaria (mg/día)</label><input data-f="dosisDiaria" type="number" inputmode="decimal" min="0" step="any" placeholder="Dosis mg/24 h" value="${esc(r.dosisDiaria != null ? r.dosisDiaria : '')}"></div>
         <button class="btn danger icon" type="button" data-act="del" aria-label="Quitar ${esc(H.FARMACOS[r.farmaco].nombre)}">✕</button>
-      </div>`).join('') || '<p class="muted">Añada al menos un fármaco.</p>';
+      </div>`).join('');
   }
 
   function syncDurBtnsUI() {
@@ -231,9 +262,6 @@
     });
   }
 
-  /* HYP-002: Filtra dispositivos compatibles para la duración seleccionada, autoselecciona SOLO si es único,
-   * muestra solo compatibles con etiquetas cortas si hay varios (invalidando selección previa incompatible sin
-   * elegir arbitrariamente en Modo Experto), o invalida si no queda ninguno. */
   function actualizarSeleccionInfusorPorDuracion() {
     const wrap = $('#device-compat-wrap');
     const sel = $('#infusor-select');
@@ -243,7 +271,7 @@
       state.infusor = 'custom';
       customFields.hidden = false;
       sel.hidden = true;
-      wrap.innerHTML = `<div class="compat-unico"><span class="compat-tag">Modo personalizado</span> <span class="compat-params">Defina volumen y caudal; verifique el prospecto del fabricante (precaución ámbar activa).</span></div>` +
+      wrap.innerHTML = `<div class="compat-unico"><span class="compat-tag">Modo personalizado</span> <span class="compat-params">Defina volumen y caudal; verifique el prospecto del fabricante (precaución activa).</span></div>` +
         `<p class="compat-nota">La duración del dispositivo no garantiza por sí sola la estabilidad fisicoquímica de la mezcla.</p>`;
       return { compatible: true };
     }
@@ -253,142 +281,145 @@
     try {
       filtro = H.filtrarInfusoresCompatibles({ dias: state.diasSeleccionados, farmacos: state.rows });
     } catch (e) {
-      state.infusor = null;
-      sel.innerHTML = '';
-      sel.hidden = true;
-      wrap.innerHTML = `<div class="compat-empty" role="alert">⚠ ${esc(e.message)}</div>`;
-      return { compatible: false, error: e.message };
+      filtro = { compatibles: [], unico: false, ninguno: true, motivoIncompatibilidad: e.message };
     }
 
-    if (filtro.ninguno) {
+    if (filtro.ninguno || filtro.compatibles.length === 0) {
       state.infusor = null;
-      sel.innerHTML = '';
       sel.hidden = true;
-      wrap.innerHTML = `<div class="compat-empty" role="alert"><strong>Sin dispositivo compatible</strong> · ${esc(filtro.motivoIncompatibilidad)}</div>`;
-      return { compatible: false, error: filtro.motivoIncompatibilidad };
+      wrap.innerHTML = `<div class="compat-ninguno"><span class="compat-alert">⚠️ Sin dispositivo compatible</span> <span class="compat-motivo">${esc(filtro.motivoIncompatibilidad || 'Incompatible')}</span></div>`;
+      return { compatible: false, motivo: filtro.motivoIncompatibilidad };
     }
 
     if (filtro.unico) {
-      const unico = filtro.autoseleccionado;
-      state.infusor = unico.id;
-      sel.innerHTML = `<option value="${esc(unico.id)}" selected>${esc(unico.nombre)} — ${esc(unico.etiquetaCorta)}</option>`;
-      sel.value = unico.id;
+      state.infusor = filtro.autoseleccionado.id;
       sel.hidden = true;
-      wrap.innerHTML =
-        `<div class="compat-unico"><span class="compat-tag">Selección automática</span> <strong>${esc(unico.nombre)}</strong> · <span class="compat-params">${esc(unico.etiquetaCorta)}</span></div>` +
-        `<p class="compat-nota">La duración del dispositivo no garantiza por sí sola la estabilidad fisicoquímica de la mezcla.</p>`;
-      return { compatible: true };
+      wrap.innerHTML = `<div class="compat-unico"><span class="compat-tag">Dispositivo seleccionado</span> <strong class="compat-nombre">${esc(filtro.autoseleccionado.nombre)}</strong> <span class="compat-etiqueta">${esc(filtro.autoseleccionado.etiquetaCorta)}</span></div>`;
+      return { compatible: true, infusor: filtro.autoseleccionado };
     }
 
-    // Varios dispositivos compatibles con diferencias relevantes:
-    // conservar solo si el dispositivo actualmente seleccionado sigue siendo compatible.
-    // En Modo Experto NO autoseleccionar arbitrariamente cuando hay >1 opción compatible.
-    const sigueCompatible = filtro.compatibles.some((x) => x.id === state.infusor);
-    if (!sigueCompatible) {
-      state.infusor = state.modo === 'experto' ? null : filtro.compatibles[0].id;
-    }
-    sel.innerHTML =
-      (state.infusor === null ? '<option value="" selected disabled>Seleccione un dispositivo compatible…</option>' : '') +
-      filtro.compatibles
-        .map((x) => `<option value="${esc(x.id)}"${x.id === state.infusor ? ' selected' : ''}>${esc(x.nombre)} — ${esc(x.etiquetaCorta)}</option>`)
-        .join('');
-    sel.value = state.infusor || '';
-    sel.hidden = true;
+    const idActualSigueCompatible = filtro.compatibles.some((c) => c.id === state.infusor);
+    if (!idActualSigueCompatible) state.infusor = filtro.compatibles[0].id;
 
-    const tarjetas = filtro.compatibles.map((x) => {
-      const activo = x.id === state.infusor;
-      return `<button type="button" class="compat-card${activo ? ' active' : ''}" role="radio" aria-checked="${activo}" data-infusor-id="${esc(x.id)}">` +
-        `<strong>${esc(x.nombre)}</strong>` +
-        `<span>${esc(x.etiquetaCorta)}</span>` +
-        `</button>`;
+    sel.innerHTML = filtro.compatibles.map((c) =>
+      `<option value="${c.id}"${c.id === state.infusor ? ' selected' : ''}>${esc(c.nombre)} · ${esc(c.etiquetaCorta)}</option>`
+    ).join('');
+    sel.hidden = false;
+
+    const cardsHtml = filtro.compatibles.map((c) => {
+      const activo = c.id === state.infusor;
+      return `<button type="button" class="compat-card ${activo ? 'active' : ''}" data-infusor-id="${c.id}">
+        <strong>${esc(c.nombre)}</strong>
+        <span class="compat-kpis">${esc(c.etiquetaCorta)}</span>
+      </button>`;
     }).join('');
 
-    const labelTexto = state.infusor === null
-      ? `Seleccione un modelo compatible (${filtro.compatibles.length} disponibles)`
-      : `Modelos compatibles (${filtro.compatibles.length})`;
-
-    wrap.innerHTML =
-      `<label class="field-label">${esc(labelTexto)}</label>` +
-      `<div class="compat-opciones" role="radiogroup" aria-label="Modelos de infusor compatibles">${tarjetas}</div>` +
-      `<p class="compat-nota">La duración del dispositivo no garantiza por sí sola la estabilidad fisicoquímica de la mezcla.</p>`;
-    return { compatible: true, requiereSeleccion: state.infusor === null };
+    wrap.innerHTML = `<div class="compat-multi-head"><span class="field-label">Dispositivos compatibles para ${fmt(state.diasSeleccionados)} días (elija uno):</span></div><div class="compat-cards-grid">${cardsHtml}</div>`;
+    return { compatible: true, seleccionMultiple: true };
   }
 
-  function leerInfusor() {
-    if (!state.infusor) return null;
-    if (state.infusor !== 'custom') return state.infusor;
-    const llen = $('#c-llenado').value;
-    if ($('#c-real')) $('#c-real').value = llen;
-    return { id: 'custom', llenado: llen, volumenReal: llen, ritmo: $('#c-ritmo').value };
-  }
-
-  function setDuracion(diasVal) {
-    const nuevaDuracion = diasVal === 'custom' ? 'custom' : Number(diasVal);
-    if (state.modo === 'experto' && nuevaDuracion !== state.diasSeleccionados && nuevaDuracion !== 'custom') {
-      // Al cambiar de duración en modo experto, invalidar la selección previa para recalcular;
-      // si solo queda 1 compatible se autoseleccionará; si quedan varios se pedirá elección explícita.
-      state.infusor = null;
-    }
-    state.diasSeleccionados = nuevaDuracion;
+  function setDuracion(dias) {
+    state.diasSeleccionados = dias;
     syncDurBtnsUI();
+    actualizarSeleccionInfusorPorDuracion();
     recalcular();
   }
 
-  /* HYP-003: Resumen informativo estático (dl/dt/dd), sin apariencia de botones */
-  function renderResumenFicha(r) {
-    return `
-      <div class="ficha-item"><dt>Horas</dt><dd>${fmt(r.horas)} h</dd></div>
-      <div class="ficha-item"><dt>Días</dt><dd>${fmt(r.dias)} días</dd></div>
-      <div class="ficha-item"><dt>Llenado</dt><dd>${fmt(r.infusor.llenado)} ml</dd></div>
-      <div class="ficha-item"><dt>Caudal</dt><dd>${fmt(r.infusor.ritmo)} ml/h</dd></div>
-      <div class="ficha-item"><dt>Vol. real</dt><dd>${fmt(r.infusor.volumenReal)} ml</dd></div>`;
+  function leerInfusor() {
+    if (state.diasSeleccionados === 'custom') {
+      const llenado = Number($('#c-llenado').value);
+      return {
+        id: 'custom',
+        llenado,
+        volumenReal: llenado,
+        ritmo: Number($('#c-ritmo').value),
+      };
+    }
+    return state.infusor;
+  }
+
+  function renderInfusorResumen(d, motivoIncompatible) {
+    const el = $('#infusor-resumen');
+    if (!el) return;
+    if (motivoIncompatible || !d) {
+      el.innerHTML = `
+        <div class="kpi-item kpi-alerta">
+          <dt class="kpi-label">Estado</dt>
+          <dd class="kpi-val text-danger">Incompatible</dd>
+        </div>
+        <div class="kpi-item kpi-full">
+          <dt class="kpi-label">Motivo</dt>
+          <dd class="kpi-val">${esc(motivoIncompatible || 'Seleccione dispositivo compatible.')}</dd>
+        </div>`;
+      return;
+    }
+    const inf = d.infusor;
+    el.innerHTML = `
+      <div class="kpi-item">
+        <dt class="kpi-label">Duración real</dt>
+        <dd class="kpi-val"><strong>${fmt(d.horas)} h</strong> <span class="kpi-sub">(${fmt(d.dias)} días)</span></dd>
+      </div>
+      <div class="kpi-item">
+        <dt class="kpi-label">Volumen llenado</dt>
+        <dd class="kpi-val"><strong>${fmt(inf.llenado)} ml</strong></dd>
+      </div>
+      <div class="kpi-item">
+        <dt class="kpi-label">Caudal nominal</dt>
+        <dd class="kpi-val"><strong>${fmt(inf.ritmo)} ml/h</strong></dd>
+      </div>
+      <div class="kpi-item">
+        <dt class="kpi-label">Dispositivo</dt>
+        <dd class="kpi-val kpi-device-name" title="${esc(inf.fabricante || inf.nombre)}">${esc(inf.referenciaFabricante ? inf.referenciaFabricante + ' · ' + (inf.diasCategoria || fmt(d.dias)) + 'd' : inf.nombre)}</dd>
+      </div>`;
   }
 
   function recalcular() {
-    const cont = $('#resultado');
     sincronizarAplicada();
-    syncDurBtnsUI();
-
-    const estadoDisp = actualizarSeleccionInfusorPorDuracion();
-    if (!estadoDisp.compatible) {
+    const compatResult = actualizarSeleccionInfusorPorDuracion();
+    const cont = $('#resultado');
+    if (!compatResult.compatible) {
       state.ultimo = null;
-      $('#infusor-resumen').innerHTML = '';
-      setAlertas('infusor', [{
-        nivel: 'rojo',
-        codigo: 'VOLUMEN_EXCEDIDO',
-        mensaje: estadoDisp.error || 'Sin dispositivo compatible para la duración y el volumen de fármacos configurados.',
-      }]);
-      cont.innerHTML = `<div class="card estado rojo" role="alert"><strong>⛔ Sin dispositivo compatible</strong><p>${esc(estadoDisp.error || 'Ajuste la duración, use una presentación más concentrada o reduzca el volumen.')}</p></div>`;
-      if (!$('#panel-nota').hidden) actualizarNota();
-      return;
-    }
-
-    if (estadoDisp.requiereSeleccion) {
-      state.ultimo = null;
-      $('#infusor-resumen').innerHTML = '';
-      setAlertas('infusor', []);
-      cont.innerHTML = `<div class="card muted" role="status">Seleccione uno de los modelos compatibles para calcular la preparación.</div>`;
+      renderInfusorResumen(null, compatResult.motivo);
+      setAlertas('infusor', [{ nivel: 'rojo', codigo: 'DISPOSITIVO_INCOMPATIBLE', mensaje: compatResult.motivo || 'Dispositivo incompatible.' }]);
+      cont.innerHTML = `<div class="card estado rojo" role="alert"><strong>⛔ Dispositivo incompatible</strong><p>${esc(compatResult.motivo)}</p></div>`;
       if (!$('#panel-nota').hidden) actualizarNota();
       return;
     }
 
     try {
-      const r = H.calcularInfusor({ infusor: leerInfusor(), farmacos: state.rows });
+      const infLeido = leerInfusor();
+      if (!infLeido) {
+        state.ultimo = null;
+        renderInfusorResumen(null, 'No se ha seleccionado dispositivo.');
+        cont.innerHTML = '<div class="card muted"><p>Seleccione un dispositivo compatible.</p></div>';
+        return;
+      }
+      const dur = H.calcularDuracion(infLeido);
+      renderInfusorResumen(dur);
+
+      const r = H.calcularInfusor({ infusor: infLeido, farmacos: state.rows });
       state.ultimo = r;
-      $('#infusor-resumen').innerHTML = renderResumenFicha(r);
       setAlertas('infusor', r.semaforo.alertas);
-      cont.innerHTML = r.farmacos.length ? renderResultado(r) : '<div class="card muted">Introduzca una dosis diaria para calcular la preparación.</div>';
+
+      if (!r.farmacos.length) {
+        cont.innerHTML = `
+          <div class="card empty-result">
+            <div class="empty-result-cuerpo">
+              <p class="empty-title">Preparación no calculada</p>
+              <p class="muted">Añada fármacos con su dosis diaria para calcular la preparación, comprobar los volúmenes de llenado y revisar el desglose matemático.</p>
+            </div>
+          </div>`;
+      } else {
+        cont.innerHTML = renderResultado(r);
+      }
     } catch (e) {
       state.ultimo = null;
-      $('#infusor-resumen').innerHTML = '';
-      setAlertas('infusor', [{ nivel: 'rojo', codigo: 'ENTRADA_INVALIDA', mensaje: e.message }]);
-      cont.innerHTML = `<div class="card estado rojo" role="alert"><strong>⛔ Datos inválidos</strong><p>${esc(e.message)}</p></div>`;
+      setAlertas('infusor', [{ nivel: 'rojo', codigo: 'ERROR_CALCULO', mensaje: e.message }]);
+      cont.innerHTML = `<div class="card estado rojo" role="alert"><strong>⛔ Datos no válidos</strong><p>${esc(e.message)}</p></div>`;
     }
     if (!$('#panel-nota').hidden) actualizarNota();
   }
 
-  /* HYP-004: En modo sencillo muestra solo presentación identificable, «Añadir al infusor: X ml» y «Abrir: N ampollas»,
-   * retirando «aspirar» y «desechar». En modo experto conserva la tabla técnica completa. */
   function renderPreparacionSencilla(r) {
     const items = r.farmacos.map((f) => `
       <li class="prep-item">
@@ -399,13 +430,13 @@
         <div class="prep-acciones">
           <span class="prep-dato">Añadir al infusor: <strong>${fmt(f.volumenIncorporar)} ml</strong></span>
           <span class="prep-dato">Abrir: <strong>${f.ampollas} ${f.tipoEnvase === 'vial' ? (f.ampollas === 1 ? 'vial' : 'viales') : 'ampollas'}</strong></span>
-          ${f.sobraContenido ? `<span class="prep-sobrante">${esc(f.notaSobrante)}</span>` : ''}
+          ${f.sobraContenido ? `<span class="prep-sobrante">${esc(f.notaSobrante)} (${fmt(f.volumenSobrante)} ml sobrantes)</span>` : ''}
         </div>
       </li>`).join('');
     return `
       <ul class="prep-sencilla">${items}</ul>
       <div class="prep-suero">
-        <strong>Suero fisiológico 0,9 %</strong>
+        <strong>Suero fisiológico 0,9 % (Diluyente)</strong>
         <span>Añadir al infusor: <strong class="vol-suero">${fmt(r.suero)} ml</strong></span>
       </div>`;
   }
@@ -428,9 +459,53 @@
         </tbody></table></div>`;
   }
 
+  /* Corrección 1: Desglose matemático explícito y comprobable paso a paso */
+  function renderDesgloseMatematico(r) {
+    if (!r.operaciones || !r.farmacos.length) return '';
+
+    const farmacosOps = r.farmacos.map((f, i) => `
+      <div class="desglose-f-box">
+        <div class="desglose-f-header">
+          <strong>${i + 1}. ${esc(f.nombre)}</strong>
+          <span class="badge muted">${esc(f.presentacion.label)}</span>
+        </div>
+        <div class="desglose-grid">
+          <div class="d-item"><span class="d-lbl">Concentración:</span> <code class="d-val">${esc(f.operaciones.concentracion)}</code></div>
+          <div class="d-item"><span class="d-lbl">Dosis acumulada (${fmt(r.dias)} d):</span> <code class="d-val">${esc(f.operaciones.dosisAcumulada)}</code></div>
+          <div class="d-item"><span class="d-lbl">Volumen a extraer:</span> <code class="d-val">${esc(f.operaciones.volumenAspirar)}</code></div>
+          <div class="d-item"><span class="d-lbl">Envases a abrir:</span> <code class="d-val">${esc(f.operaciones.ampollas)}</code></div>
+          <div class="d-item"><span class="d-lbl">Volumen en envases:</span> <code class="d-val">${esc(f.operaciones.volumenEnvases)}</code></div>
+          <div class="d-item"><span class="d-lbl">Sobrante a desechar:</span> <code class="d-val">${esc(f.operaciones.sobrante)}</code></div>
+        </div>
+      </div>
+    `).join('');
+
+    return `
+      <details class="card desglose-card" open>
+        <summary class="desglose-summary">
+          <span class="desglose-title">📐 Desglose matemático y comprobación paso a paso</span>
+          <span class="desglose-badge">Aritmética verificada</span>
+        </summary>
+        <div class="desglose-cuerpo">
+          <p class="muted">Operaciones exactas utilizadas para el cálculo de masa acumulada, volumen a aspirar y diluyente según la duración real calculada (${fmt(r.horas)} h / ${fmt(r.dias)} días a ${fmt(r.infusor.ritmo)} ml/h):</p>
+          <div class="desglose-farmacos-lista">${farmacosOps}</div>
+          <div class="desglose-dispositivo-box">
+            <h5>Balance volumétrico del infusor</h5>
+            <div class="desglose-grid">
+              <div class="d-item"><span class="d-lbl">Volumen total de fármacos:</span> <code class="d-val">${esc(r.operaciones.volumenFarmacos)}</code></div>
+              <div class="d-item"><span class="d-lbl">Diluyente (Suero Fisiológico 0,9 %):</span> <code class="d-val">${esc(r.operaciones.diluyente)}</code></div>
+              <div class="d-item"><span class="d-lbl">Volumen final preparado:</span> <code class="d-val">${esc(r.operaciones.volumenFinal)}</code></div>
+              <div class="d-item"><span class="d-lbl">Duración y ritmo:</span> <code class="d-val">${esc(r.operaciones.duracion)}</code></div>
+            </div>
+          </div>
+        </div>
+      </details>`;
+  }
+
   function renderResultado(r) {
     const pct = Math.min(100, (r.volumenAspirado / r.infusor.llenado) * 100);
     const cuerpoPrep = state.modo === 'sencillo' ? renderPreparacionSencilla(r) : renderPreparacionExperta(r);
+    const desgloseMat = renderDesgloseMatematico(r);
     const rescates = r.farmacos.filter((f) => f.rescate).map((f) => `<li><strong>${esc(f.nombre)}:</strong> ${esc(f.rescate.texto)}</li>`).join('');
     const nivel = r.semaforo.nivel;
     const estado = nivel === 'verde'
@@ -443,8 +518,9 @@
         <h3>Preparación</h3>
         ${cuerpoPrep}
         <div class="meter ${r.volumenExcedido ? 'over' : ''}" role="img" aria-label="Volumen de fármacos ${fmt(r.volumenAspirado)} de ${fmt(r.infusor.llenado)} ml"><span style="width:${pct}%"></span></div>
-        <p class="resumen-vol"><strong>Volumen final total preparado:</strong> ${fmt(r.volumenFinal)} ml (llenado ${fmt(r.infusor.llenado)} ml)</p>
+        <p class="resumen-vol"><strong>Volumen final total preparado:</strong> ${fmt(r.volumenFinal)} ml (llenado nominal ${fmt(r.infusor.llenado)} ml)</p>
       </div>
+      ${desgloseMat}
       <div class="card">
         <h3>Rescates SC · intervalo mínimo de seguridad</h3>
         <ul class="lista">${rescates || '<li class="muted">Sin rescates definidos.</li>'}</ul>
@@ -497,6 +573,7 @@
       state.rows.splice(+b.closest('.fila').dataset.i, 1);
       renderRows(); recalcular();
     });
+
     $('#add-farmaco').addEventListener('click', () => {
       const usados = state.rows.map((r) => r.farmaco);
       const libre = Object.keys(H.FARMACOS).find((k) => usados.indexOf(k) === -1) || 'morfina';
@@ -505,12 +582,25 @@
       const filas = $$('.fila', list); const ult = filas[filas.length - 1];
       if (ult) $('input', ult).focus();
     });
+
+    // Corrección 3: Botón para vaciar / reiniciar constructor de infusor
+    const btnVaciar = $('#vaciar-infusor');
+    if (btnVaciar) {
+      btnVaciar.addEventListener('click', () => {
+        state.rows = [];
+        state.aplicada = null;
+        renderRows();
+        recalcular();
+        toast('Constructor de infusores vaciado');
+      });
+    }
+
     $('#resultado').addEventListener('click', (e) => { if (e.target.closest('[data-act="a-nota"]')) switchTab('nota'); });
     renderRows();
     recalcular();
   }
 
-  /* ───────────── Tab 2 · Guiado ───────────── */
+  /* ───────────── Tab 2 · Modo Guiado (Corrección 2, 6 y 9) ───────────── */
   const g = { paso: 0, resp: {} };
   function sincronizarAlertasGuiado() {
     const tieneRespuestas = Object.keys(g.resp).some((k) => k !== 'midazolamDisnea');
@@ -521,6 +611,7 @@
     const parcial = H.planGuiado(g.resp);
     setAlertas('guiado', parcial.semaforo.alertas);
   }
+
   function renderGuiado() {
     const cont = $('#guiado');
     const total = H.GUIA_PASOS.length;
@@ -540,6 +631,81 @@
     cont.innerHTML = `<div class="card">${progreso}<h3>${esc(p.titulo)}</h3><div class="opts">${cuerpo}</div>
       <div class="btn-row">${g.paso > 0 ? '<button class="btn ghost" type="button" data-act="atras">← Atrás</button>' : ''}<button class="btn ghost" type="button" data-act="reiniciar">Reiniciar</button></div></div>`;
   }
+
+  /* Corrección 9: Renderizado integrado de la Escala de Ramsay */
+  function renderRamsayComponente() {
+    const r = state.ramsay;
+    const evaluacion = H.evaluarRamsay({
+      nivelObservado: r.nivelObservado,
+      nivelObjetivo: r.nivelObjetivo,
+      preferenciasPaciente: r.preferencias,
+      voluntadesAnticipadas: r.voluntadesAnticipadas,
+      representanteLegal: r.representanteLegal,
+      consentimientoDocumentado: r.consentimientoDocumentado,
+      reevaluacionConfort: r.reevaluacionConfort,
+    });
+
+    const tarjetasNiveles = H.ESCALA_RAMSAY.niveles.map((n) => {
+      const esObs = r.nivelObservado === n.nivel;
+      const esObj = r.nivelObjetivo === n.nivel;
+      return `
+        <div class="ramsay-card ${esObs ? 'activo-obs' : ''} ${esObj ? 'activo-obj' : ''}">
+          <div class="ramsay-card-top">
+            <span class="ramsay-num">${n.nivel}</span>
+            <span class="ramsay-pill ${n.categoria}">${n.nivel <= 2 ? 'Vigilia' : (n.nivel <= 4 ? 'Sedación leve/moderada' : 'Sedación profunda')}</span>
+          </div>
+          <strong class="ramsay-card-title">${esc(n.titulo)}</strong>
+          <p class="ramsay-card-desc">${esc(n.descripcion)}</p>
+          <p class="ramsay-card-estado"><small>${esc(n.estadoClinico)}</small></p>
+          <div class="ramsay-card-btns">
+            <button type="button" class="btn btn-sm ${esObs ? 'primary' : 'ghost'}" data-act="set-ramsay-obs" data-nivel="${n.nivel}">
+              ${esObs ? '✓ Observado' : 'Registrar observado'}
+            </button>
+            <button type="button" class="btn btn-sm ${esObj ? 'secondary' : 'ghost'}" data-act="set-ramsay-obj" data-nivel="${n.nivel}">
+              ${esObj ? '★ Objetivo' : 'Fijar objetivo'}
+            </button>
+          </div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="card ramsay-bloque">
+        <div class="card-head">
+          <h4>Escala de Sedación de Ramsay (6 niveles)</h4>
+          <span class="badge info">Monitorización clínica</span>
+        </div>
+        <p class="muted">Herramienta para monitorizar la profundidad de la sedación. La selección de un nivel <strong>nunca prescribe dosis automáticas</strong>; toda sedación exige indicación refractaria y consentimiento documentado.</p>
+        <div class="ramsay-grid">${tarjetasNiveles}</div>
+        ${evaluacion.valido ? `
+          <div class="alert ${evaluacion.concordancia === 'en_objetivo' ? 'verde' : 'ambar'} ramsay-eval-alert">
+            <strong>${esc(evaluacion.mensajeConcordancia)}</strong>
+            <p><small>${esc(evaluacion.advertencia)}</small></p>
+          </div>
+        ` : `<div class="alert ambar"><p><small>${esc(H.ESCALA_RAMSAY.advertenciaClinica)}</small></p></div>`}
+        <div class="ramsay-doc-form">
+          <h5>Garantías y voluntades clínicas</h5>
+          <div class="grid2">
+            <label class="opt check">
+              <input type="checkbox" data-act="toggle-voluntades" ${r.voluntadesAnticipadas ? 'checked' : ''}>
+              <span>Voluntades anticipadas consultadas</span>
+            </label>
+            <label class="opt check">
+              <input type="checkbox" data-act="toggle-representante" ${r.representanteLegal ? 'checked' : ''}>
+              <span>Representante o familia informados</span>
+            </label>
+            <label class="opt check">
+              <input type="checkbox" data-act="toggle-consentimiento" ${r.consentimientoDocumentado ? 'checked' : ''}>
+              <span>Consentimiento informado documentado</span>
+            </label>
+          </div>
+          <div class="form-group">
+            <label>Preferencias del paciente (consciencia, comunicación, alivio):</label>
+            <input type="text" id="ramsay-pref-input" placeholder="Ej: Deseo de permanecer comunicable o alivio pleno de disnea" value="${esc(r.preferencias)}">
+          </div>
+        </div>
+      </div>`;
+  }
+
   function renderPlan(cont) {
     const plan = H.planGuiado(g.resp);
     setAlertas('guiado', plan.semaforo.alertas);
@@ -549,6 +715,8 @@
     const mida = plan.ofreceMidazolamDisnea
       ? `<label class="opt check"><input type="checkbox" data-act="mida-disnea"${g.resp.midazolamDisnea ? ' checked' : ''}> <span>Añadir midazolam para la disnea (reservado si hay ansiedad/pánico asociado)</span></label>`
       : '';
+    const ramsayHtml = (g.resp.sintomas && g.resp.sintomas.indexOf('sedacion') !== -1) ? renderRamsayComponente() : '';
+
     cont.innerHTML = `
       ${bloq}
       ${dest}
@@ -557,6 +725,7 @@
         ${sug ? `<ul class="lista">${sug}</ul>` : '<p class="muted">Sin fármacos sugeridos automáticamente.</p>'}
         ${plan.advertencias.length ? `<div class="alert ambar"><strong>⚠️ A tener en cuenta</strong>${plan.advertencias.map((a) => `<p>${esc(a)}</p>`).join('')}</div>` : ''}
       </div>
+      ${ramsayHtml}
       <div class="card"><h3>Medidas generales</h3><ul class="lista">${plan.medidas.map((m) => `<li>${esc(m)}</li>`).join('')}</ul></div>
       <div class="btn-row">
         ${plan.sugerencias.length ? '<button class="btn primary" type="button" data-act="cargar">💉 Cargar en Infusor</button>' : ''}
@@ -565,13 +734,64 @@
       </div>`;
     g.plan = plan;
   }
+
+  /* Reinicia todos los módulos para no arrastrar datos entre pacientes. */
+  function nuevaConsulta() {
+    g.paso = 0;
+    g.resp = {};
+    g.plan = null;
+    state.rows = []; // Constructor vacío (Corrección 3)
+    state.ultimo = null;
+    state.aplicada = null;
+    state.conversion = null;
+    state.parchesFentanilo = [{ parche: 25, cantidad: 1 }];
+    state.ramsay = {
+      nivelObservado: null,
+      nivelObjetivo: null,
+      preferencias: '',
+      voluntadesAnticipadas: false,
+      representanteLegal: false,
+      consentimientoDocumentado: false,
+      reevaluacionConfort: '',
+    };
+    Object.keys(state.alertas).forEach((k) => { state.alertas[k] = []; });
+    state.diasSeleccionados = 5;
+    state.infusor = 'sfs2_250';
+    if ($('#c-llenado')) $('#c-llenado').value = '100';
+    if ($('#c-real')) $('#c-real').value = '100';
+    if ($('#c-ritmo')) $('#c-ritmo').value = '2';
+    if ($('#opioide-select')) $('#opioide-select').value = 'fentanilo_td';
+    if ($('#opioide-dosis')) $('#opioide-dosis').value = '';
+    if ($('#opioide-reduccion')) $('#opioide-reduccion').value = '0';
+    renderGuiado();
+    renderRows();
+    recalcular();
+    if ($('#opioide-select')) $('#opioide-select').dispatchEvent(new Event('change'));
+    actualizarNota();
+    switchTab('guiado');
+  }
+
   function initGuiado() {
     const cont = $('#guiado');
     cont.addEventListener('change', (e) => {
-      if (e.target.dataset.act !== 'mida-disnea') return;
-      g.resp.midazolamDisnea = e.target.checked;
-      renderGuiado();
+      if (e.target.dataset.act === 'mida-disnea') {
+        g.resp.midazolamDisnea = e.target.checked;
+        renderGuiado();
+      } else if (e.target.dataset.act === 'toggle-voluntades') {
+        state.ramsay.voluntadesAnticipadas = e.target.checked;
+      } else if (e.target.dataset.act === 'toggle-representante') {
+        state.ramsay.representanteLegal = e.target.checked;
+      } else if (e.target.dataset.act === 'toggle-consentimiento') {
+        state.ramsay.consentimientoDocumentado = e.target.checked;
+      }
     });
+
+    cont.addEventListener('input', (e) => {
+      if (e.target.id === 'ramsay-pref-input') {
+        state.ramsay.preferencias = e.target.value;
+      }
+    });
+
     cont.addEventListener('click', (e) => {
       const opt = e.target.closest('[data-v]');
       const act = e.target.closest('[data-act]');
@@ -592,22 +812,30 @@
         } else if (a === 'reiniciar') {
           g.paso = 0; g.resp = {}; renderGuiado();
         } else if (a === 'nueva') {
-          nuevaConsulta(); toast('Nueva consulta: todos los campos reiniciados');
+          nuevaConsulta(); toast('Nueva consulta iniciada');
         } else if (a === 'cargar' && g.plan) {
           state.rows = g.plan.sugerencias.map((s) => ({ farmaco: s.farmaco, presentacion: H.FARMACOS[s.farmaco].presentaciones[0].id, dosisDiaria: s.dosisDiaria }));
           state.aplicada = null;
-          renderRows(); recalcular(); switchTab('rapido'); toast('Sugerencias cargadas: revise dosis y presentaciones');
+          renderRows(); recalcular(); switchTab('rapido'); toast('Sugerencias cargadas en el infusor');
+        } else if (a === 'set-ramsay-obs') {
+          state.ramsay.nivelObservado = Number(act.dataset.nivel);
+          renderPlan(cont);
+        } else if (a === 'set-ramsay-obj') {
+          state.ramsay.nivelObjetivo = Number(act.dataset.nivel);
+          renderPlan(cont);
         }
       }
     });
     renderGuiado();
   }
 
-  /* ───────────── Tab 3 · Opioides (HYP-001: combinación de parches de fentanilo) ───────────── */
+  /* ───────────── Tab 3 · Opioides (HYP-001) ───────────── */
   function opcionesParcheFentanilo(selVal) {
-    return H.PRESENTACIONES_FENTANILO_TD.map((p) =>
-      `<option value="${p.liberacion}"${Number(selVal) === p.liberacion ? ' selected' : ''}>${esc(p.label)}</option>`
-    ).join('');
+    return H.PRESENTACIONES_FENTANILO_TD.map((p) => {
+      const val = p.liberacion !== undefined ? p.liberacion : p.liberacionReal;
+      const lbl = p.label !== undefined ? p.label : p.etiqueta;
+      return `<option value="${val}"${Math.abs(Number(selVal) - val) < 1e-6 ? ' selected' : ''}>${esc(lbl)}</option>`;
+    }).join('');
   }
 
   function renderFilasParchesFentanilo() {
@@ -618,189 +846,289 @@
       <div class="parche-fila" data-fp-i="${i}">
         <div>
           <label>Presentación</label>
-          <select data-fp="parche" aria-label="Presentación del parche ${i + 1}">${opcionesParcheFentanilo(r.parche)}</select>
+          <select data-fp="parche">${opcionesParcheFentanilo(r.parche)}</select>
         </div>
         <div>
-          <label>Cantidad</label>
-          <input data-fp="cantidad" type="number" inputmode="numeric" min="1" max="10" step="1" value="${esc(r.cantidad)}" aria-label="Cantidad de parches fila ${i + 1}">
+          <label>Cantidad (número entero)</label>
+          <input data-fp="cantidad" type="number" inputmode="numeric" min="1" max="10" step="1" value="${esc(r.cantidad)}">
         </div>
-        ${n > 1 ? `<button class="btn danger icon" type="button" data-fp-act="del" aria-label="Eliminar fila de parche ${i + 1}">✕</button>` : '<span></span>'}
+        ${n > 1 ? `<button class="btn danger icon" type="button" data-act="del-parche-fentanilo" aria-label="Eliminar fila de parche">✕</button>` : ''}
       </div>`).join('');
+  }
+
+  function calcularYRenderizarOpioides() {
+    const sel = $('#opioide-select').value;
+    const reduccion = Number($('#opioide-reduccion').value);
+    const cont = $('#opioide-resultado');
+    const fentaniloWrap = $('#fentanilo-parches-wrap');
+    const dosisWrap = $('#opioide-dosis-wrap');
+    const dosisLabel = $('#opioide-dosis-label');
+    const dosisInput = $('#opioide-dosis');
+    const parcheSelect = $('#opioide-parche');
+    const desgloseP = $('#fentanilo-desglose');
+
+    const esFentanilo = sel === 'fentanilo_td';
+    fentaniloWrap.hidden = !esFentanilo;
+    dosisWrap.hidden = esFentanilo;
+
+    let res;
+    if (esFentanilo) {
+      res = H.convertirOpioide('fentanilo_td', state.parchesFentanilo, { reduccion });
+      if (!res.error && desgloseP) {
+        desgloseP.textContent = `Dosis total de fentanilo: ${fmt(res.dosis)} µg/h (${res.desgloseTexto || res.desgloseParches})`;
+      }
+    } else if (sel === 'metadona') {
+      dosisInput.hidden = false;
+      parcheSelect.hidden = true;
+      res = H.convertirOpioide('metadona', 1);
+    } else {
+      const def = H.OPIOIDES[sel];
+      if (!def) {
+        cont.innerHTML = '';
+        setAlertas('opioide', []);
+        return;
+      }
+      dosisLabel.textContent = `Dosis actual (${def.unidad})`;
+      if (def.valores) {
+        dosisInput.hidden = true;
+        parcheSelect.hidden = false;
+        if (!parcheSelect.options.length || parcheSelect.dataset.op !== sel) {
+          parcheSelect.innerHTML = def.valores.map((v) => `<option value="${v}">${v} ${def.unidad}</option>`).join('');
+          parcheSelect.dataset.op = sel;
+        }
+        res = H.convertirOpioide(sel, Number(parcheSelect.value), { reduccion });
+      } else {
+        dosisInput.hidden = false;
+        parcheSelect.hidden = true;
+        const val = Number(dosisInput.value);
+        if (!(val > 0)) {
+          cont.innerHTML = '<div class="card muted"><p>Introduzca la dosis actual para calcular la equivalencia.</p></div>';
+          setAlertas('opioide', []);
+          state.conversion = null;
+          return;
+        }
+        res = H.convertirOpioide(sel, val, { reduccion });
+      }
+    }
+
+    state.conversion = res;
+    if (res.error) {
+      cont.innerHTML = `<div class="card estado rojo" role="alert"><strong>⛔ Entrada inválida</strong><p>${esc(res.error)}</p></div>`;
+      setAlertas('opioide', [{ nivel: 'rojo', codigo: 'OPIOIDE_INVALIDO', mensaje: res.error }]);
+      return;
+    }
+    if (res.bloqueado) {
+      cont.innerHTML = `<div class="card estado rojo" role="alert"><strong>⛔ ${esc(res.titulo)}</strong><p>${esc(res.mensaje)}</p></div>`;
+      setAlertas('opioide', [res]);
+      return;
+    }
+
+    const alertasOp = [];
+    if (res.verificar) {
+      alertasOp.push({
+        nivel: 'ambar',
+        codigo: 'FACTOR_SIN_VERIFICAR',
+        mensaje: 'Equivalencia de ' + res.nombre + ' en rango clínico orientativo (Anexo 6). Titular con rescates.',
+      });
+    }
+    if (res.extrapoladoFueraTablaAnexo6) {
+      alertasOp.push({
+        nivel: 'ambar',
+        codigo: 'FENTANILO_EXTRAPOLADO',
+        mensaje: res.aviso,
+      });
+    }
+    if (reduccion === 0) {
+      alertasOp.push({
+        nivel: 'ambar',
+        codigo: 'ROTACION_SIN_REDUCCION',
+        mensaje: 'Conversión calculada sin reducción por tolerancia cruzada incompleta (0 %).',
+      });
+    }
+    setAlertas('opioide', alertasOp);
+
+    let equivalenciaCuerpo;
+    if (res.extrapoladoFueraTablaAnexo6) {
+      equivalenciaCuerpo = `
+        <div class="alert ambar" role="alert">
+          <strong>⚠️ Dosis superior a 150 µg/h</strong>
+          <p>${esc(res.aviso)}</p>
+        </div>`;
+    } else {
+      equivalenciaCuerpo = `
+        <div class="kpis">
+          <div class="kpi"><span class="kpi-label">Morfina SC diaria</span><strong>${fmt(res.morfinaSC)} mg/día</strong><small>Dosis a cargar en infusor</small></div>
+          <div class="kpi"><span class="kpi-label">Morfina oral equivalente</span><strong>${fmt(res.morfinaOral)} mg/día</strong><small>Referencia oral</small></div>
+          <div class="kpi"><span class="kpi-label">Rescate SC (1/6)</span><strong>${fmt(res.rescateSC)} mg</strong><small>Cada 4 h si dolor o disnea</small></div>
+        </div>
+        <p class="muted"><small>Rango orientativo de rotación (reducción 25–50 %): ${fmt(res.rangoRotacionSC[0])}–${fmt(res.rangoRotacionSC[1])} mg/día SC (${fmt(res.rangoRotacionOral[0])}–${fmt(res.rangoRotacionOral[1])} mg/día oral).</small></p>`;
+    }
+
+    cont.innerHTML = `
+      <div class="card">
+        <h3>Equivalencia a morfina</h3>
+        <p class="muted">Opioide actual: <strong>${esc(res.nombre)}</strong> · Dosis: <strong>${fmt(res.dosis)} ${esc(res.unidad)}</strong>${res.textoDesglose ? ` (${esc(res.textoDesglose)})` : ''} · Reducción por tolerancia cruzada: <strong>${fmt(reduccion * 100)} %</strong></p>
+        ${equivalenciaCuerpo}
+        ${res.aviso && !res.extrapoladoFueraTablaAnexo6 ? `<div class="alert ambar" role="alert"><p>${esc(res.aviso)}</p></div>` : ''}
+        <p class="muted legal"><small>${esc(res.factorTexto)} · Basado en Anexo 6 del Plan de Optimización de Opioides (Ministerio de Sanidad, 2024).</small></p>
+      </div>
+      <div class="btn-row">
+        ${res.transferibleAInfusor ? `<button class="btn primary" type="button" data-act="aplicar-infusor">💉 Aplicar ${fmt(res.morfinaSC)} mg/día de Morfina al Infusor</button>` : ''}
+      </div>`;
   }
 
   function initOpioides() {
     const sel = $('#opioide-select');
-    const dosisWrap = $('#opioide-dosis-wrap');
-    const dosis = $('#opioide-dosis');
-    const parche = $('#opioide-parche');
-    const fentWrap = $('#fentanilo-parches-wrap');
-    const fentRows = $('#fentanilo-rows');
-    const fentDesglose = $('#fentanilo-desglose');
-
-    sel.innerHTML = Object.keys(H.OPIOIDES).map((k) => `<option value="${k}">${k === 'metadona' ? '⛔ ' : ''}${esc(H.OPIOIDES[k].nombre)}</option>`).join('');
+    sel.innerHTML = Object.keys(H.OPIOIDES).map((k) => `<option value="${k}">${esc(H.OPIOIDES[k].nombre)}</option>`).join('');
     sel.value = 'fentanilo_td';
 
-    function actualizarCampos() {
-      const op = H.OPIOIDES[sel.value];
-      const esFentanilo = sel.value === 'fentanilo_td';
-      const usaParcheUnico = !esFentanilo && !!op.valores;
+    sel.addEventListener('change', calcularYRenderizarOpioides);
+    $('#opioide-dosis').addEventListener('input', calcularYRenderizarOpioides);
+    $('#opioide-parche').addEventListener('change', calcularYRenderizarOpioides);
+    $('#opioide-reduccion').addEventListener('change', calcularYRenderizarOpioides);
 
-      fentWrap.hidden = !esFentanilo;
-      dosisWrap.hidden = esFentanilo;
-      parche.hidden = !usaParcheUnico;
-      dosis.hidden = esFentanilo || usaParcheUnico || !!op.bloqueado;
-      $('#opioide-dosis-label').textContent = op.bloqueado ? 'Dosis (bloqueada)' : 'Dosis (' + op.unidad + ')';
-      if (usaParcheUnico) {
-        parche.innerHTML = op.valores.map((v) => `<option value="${v}">${fmt(v)} ${op.unidad}</option>`).join('');
-      }
-      if (esFentanilo) {
-        renderFilasParchesFentanilo();
-      }
-      calcular();
-    }
-
-    function calcular() {
-      const op = H.OPIOIDES[sel.value];
-      const cont = $('#opioide-resultado');
-      if (op.bloqueado) {
-        const b = H.convertirOpioide('metadona', 1);
-        state.conversion = null;
-        setAlertas('opioide', [{ nivel: 'rojo', codigo: b.codigo, mensaje: b.mensaje }]);
-        cont.innerHTML = `<div class="alert rojo" role="alert"><strong>⛔ Bloqueo ético · Metadona</strong><p>${esc(b.mensaje)}</p><p><strong>No se ofrece cálculo.</strong> Contacte con la unidad de paliativos o del dolor.</p></div>`;
+    $('#add-parche-fentanilo').addEventListener('click', () => {
+      if (state.parchesFentanilo.length >= 8) {
+        toast('Límite de seguridad alcanzado (máximo 8 filas de parches)');
         return;
       }
-      setAlertas('opioide', []);
+      state.parchesFentanilo.push({ parche: 25, cantidad: 1 });
+      renderFilasParchesFentanilo();
+      calcularYRenderizarOpioides();
+    });
 
-      let entrada;
-      if (sel.value === 'fentanilo_td') {
-        const comb = H.calcularParchesFentanilo(state.parchesFentanilo);
-        if (comb.error) {
-          fentDesglose.textContent = '⚠ ' + comb.error;
-          state.conversion = null;
-          cont.innerHTML = `<div class="alert ambar" role="alert"><p>${esc(comb.error)}</p></div>`;
-          return;
-        }
-        fentDesglose.textContent = 'Desglose: ' + comb.desgloseTexto + ' · Dosis total: ' + fmt(comb.dosisTotal) + ' µg/h';
-        entrada = state.parchesFentanilo;
-      } else {
-        const val = op.valores ? parche.value : dosis.value;
-        if (val === '') {
-          state.conversion = null;
-          cont.innerHTML = '<div class="card muted">Introduzca la dosis actual del paciente.</div>';
-          return;
-        }
-        entrada = val;
-      }
-
-      const r = H.convertirOpioide(sel.value, entrada, { reduccion: $('#opioide-reduccion').value });
-      if (r.error) {
-        state.conversion = null;
-        cont.innerHTML = `<div class="alert ambar" role="alert"><p>${esc(r.error)}</p></div>`;
-        return;
-      }
-      state.conversion = r;
-      const alertasOp = [];
-      if (r.verificar) {
-        alertasOp.push({ nivel: 'ambar', codigo: 'FACTOR_SIN_VERIFICAR', mensaje: 'La dosis de morfina procede de un factor de conversión de ' + r.nombre + ' no contrastado con el Anexo 6 del Ministerio. Verifique la equivalencia antes de prescribir.' });
-      }
-      if (r.extrapoladoFueraTablaAnexo6) {
-        alertasOp.push({ nivel: 'ambar', codigo: 'FENTANILO_EXTRAPOLADO', mensaje: 'La dosis total de fentanilo TD (' + fmt(r.dosis) + ' µg/h) supera el máximo tabulado en el Anexo 6 (150 µg/h). No se ofrece conversión automática a morfina fuera de tabla oficial.' });
-      }
-      setAlertas('opioide', alertasOp);
-
-      const unidadTit = r.unidadMostrar || r.unidad;
-      const advEsp = (r.advertenciasEspecificas || []).map((m) => `<div class="alert ambar" role="alert"><strong>⚠️ Advertencia de ficha técnica</strong><p>${esc(m)}</p></div>`).join('');
-
-      if (r.transferibleAInfusor === false) {
-        cont.innerHTML = `
-          <div class="card">
-            <h3>${esc(r.nombre)} · ${fmt(r.dosis)} ${esc(unidadTit)}</h3>
-            ${r.desgloseParches ? `<p class="muted"><strong>Desglose registrado:</strong> ${esc(r.desgloseParches)}</p>` : ''}
-            ${r.notaRegistro ? `<p class="muted">${esc(r.notaRegistro)}</p>` : ''}
-          </div>
-          ${advEsp}
-          ${r.aviso ? `<div class="alert ambar"><strong>⚠️ Criterio clínico y ficha técnica</strong><p>${esc(r.aviso)}</p></div>` : ''}`;
-        return;
-      }
-
-      const fen = r.fentaniloTD;
-      const lineaFentDestino = r.opioide !== 'fentanilo_td' && fen
-        ? `<p class="muted">Orientación a fentanilo TD: ${fmt(fen.teorico)} µg/h teóricos (Anexo 6)${fen.parcheTabla2Rotacion ? ' · inicio en rotación Tabla 2 FT AEMPS (~150:1): parche ' + fmt(fen.parcheTabla2Rotacion) + ' µg/h' : ''}.</p>`
-        : '';
-      const lineaRotacionAnexo5 = r.rangoRotacionSC
-        ? `<p class="muted"><strong>Rango recomendado en rotación clínica (reducción 25–50 %, Anexo 5):</strong> ${fmt(r.rangoRotacionSC[0])}–${fmt(r.rangoRotacionSC[1])} mg/24 h de morfina SC (${fmt(r.rangoRotacionOral[0])}–${fmt(r.rangoRotacionOral[1])} mg/24 h oral).</p>`
-        : '';
-
-      cont.innerHTML = `
-        <div class="card">
-          <h3>${esc(r.nombre)} · ${fmt(r.dosis)} ${esc(unidadTit)}</h3>
-          ${r.desgloseParches ? `<p class="muted"><strong>Desglose registrado:</strong> ${esc(r.desgloseParches)}</p>` : ''}
-          <div class="kpis">
-            <div class="kpi"><span>Morfina oral</span><strong>${fmt(r.morfinaOral)}</strong><small>mg/24 h</small></div>
-            <div class="kpi destacado"><span>Morfina SC (50 %)</span><strong>${fmt(r.morfinaSC)}</strong><small>mg/24 h</small></div>
-            <div class="kpi"><span>Rescate SC (1/6)</span><strong>${fmt(r.rescateSC)}</strong><small>mg</small></div>
-          </div>
-          ${r.reduccion ? `<p class="muted">Incluye reducción del ${fmt(r.reduccion * 100, 0)} % por tolerancia cruzada incompleta (equivalencia teórica bruta ${fmt(r.morfinaOralBruta)} mg/24 h oral · ${fmt(r.morfinaSCBruta)} mg/24 h SC).</p>` : `<p class="muted">Equivalencia teórica bruta (0 % reducción). En rotación clínica aplique reducción del 25–50 % por tolerancia cruzada incompleta.</p>`}
-          ${lineaRotacionAnexo5}
-          ${r.notaRegistro ? `<p class="muted">${esc(r.notaRegistro)}</p>` : ''}
-          ${lineaFentDestino}
-        </div>
-        ${r.factorTexto ? `<p class="muted">Base de conversión: ${esc(r.factorTexto)}.</p>` : ''}
-        ${advEsp}
-        ${r.aviso ? `<div class="alert ambar"><strong>⚠️ Criterio clínico y ficha técnica</strong><p>${esc(r.aviso)}</p></div>` : ''}
-        ${r.rangoMorfinaOral && r.rangoMorfinaOral[0] !== r.rangoMorfinaOral[1] ? `<p class="muted">Rango de equivalencia: ${fmt(r.rangoMorfinaOral[0])}–${fmt(r.rangoMorfinaOral[1])} mg/24 h de morfina oral (se usa el extremo inferior).</p>` : ''}
-        ${r.verificar ? '<div class="alert rojo" role="alert"><strong>Factor sin verificar</strong><p>El factor de este opioide no está contrastado con el Anexo 6 del Ministerio. Compruebe la equivalencia en el documento oficial antes de prescribir.</p></div>' : ''}
-        <div class="btn-row"><button class="btn primary" type="button" id="opioide-a-infusor">💉 Usar morfina SC en Infusor</button></div>`;
-
-      $('#opioide-a-infusor').addEventListener('click', () => {
-        const otros = state.rows.filter((x) => x.farmaco !== 'morfina');
-        const dosisSC = H.round(r.morfinaSC, 2);
-        state.rows = [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: dosisSC }].concat(otros);
-        state.aplicada = { dosis: dosisSC, nombre: r.nombre, verificar: !!r.verificar, conversion: r };
-        renderRows(); recalcular(); switchTab('rapido');
-      });
-    }
-
-    fentRows.addEventListener('change', (e) => {
+    const fRows = $('#fentanilo-rows');
+    fRows.addEventListener('change', (e) => {
       const fila = e.target.closest('.parche-fila');
       if (!fila) return;
       const idx = +fila.dataset.fpI;
-      if (e.target.dataset.fp === 'parche') {
-        state.parchesFentanilo[idx].parche = Number(e.target.value);
-        calcular();
-      }
+      if (e.target.dataset.fp === 'parche') state.parchesFentanilo[idx].parche = Number(e.target.value);
+      calcularYRenderizarOpioides();
     });
-    fentRows.addEventListener('input', (e) => {
+    fRows.addEventListener('input', (e) => {
       const fila = e.target.closest('.parche-fila');
       if (!fila || e.target.dataset.fp !== 'cantidad') return;
       const idx = +fila.dataset.fpI;
-      state.parchesFentanilo[idx].cantidad = e.target.value;
-      calcular();
+      const v = parseInt(e.target.value, 10);
+      state.parchesFentanilo[idx].cantidad = Number.isInteger(v) && v > 0 ? v : 1;
+      calcularYRenderizarOpioides();
     });
-    fentRows.addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-fp-act="del"]');
-      if (!btn) return;
-      const fila = btn.closest('.parche-fila');
-      if (!fila || state.parchesFentanilo.length <= 1) return;
+    fRows.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-act="del-parche-fentanilo"]');
+      if (!b) return;
+      const fila = b.closest('.parche-fila');
       state.parchesFentanilo.splice(+fila.dataset.fpI, 1);
       renderFilasParchesFentanilo();
-      calcular();
-    });
-    $('#add-parche-fentanilo').addEventListener('click', () => {
-      state.parchesFentanilo.push({ parche: 25, cantidad: 1 });
-      renderFilasParchesFentanilo();
-      calcular();
+      calcularYRenderizarOpioides();
     });
 
-    sel.addEventListener('change', actualizarCampos);
-    dosis.addEventListener('input', calcular);
-    parche.addEventListener('change', calcular);
-    $('#opioide-reduccion').addEventListener('change', calcular);
-    actualizarCampos();
+    $('#opioide-resultado').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-act="aplicar-infusor"]');
+      if (!b || !state.conversion || !state.conversion.transferibleAInfusor) return;
+      const conv = state.conversion;
+      const morfinaDosis = round(conv.morfinaSC, 2);
+      const filaMorf = state.rows.find((r) => r.farmaco === 'morfina');
+      if (filaMorf) {
+        filaMorf.dosisDiaria = morfinaDosis;
+      } else {
+        state.rows.unshift({ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: morfinaDosis });
+      }
+      state.aplicada = {
+        dosis: morfinaDosis,
+        nombre: conv.nombre,
+        verificar: conv.verificar,
+        conversion: conv,
+      };
+      renderRows();
+      recalcular();
+      switchTab('rapido');
+      toast(`Morfina ${fmt(morfinaDosis)} mg/día aplicada al infusor desde ${conv.nombre}`);
+    });
+
+    renderFilasParchesFentanilo();
+    calcularYRenderizarOpioides();
   }
 
-  /* ───────────── Tab 4 · Nota clínica (HYP-005: solo Infusor actual y copia sencilla) ───────────── */
-  let copiadoTimer;
+  /* ───────────── Tab 4 · Nota clínica (HYP-005) ───────────── */
+  function actualizarNota() {
+    const estadoEl = $('#nota-estado');
+    const alertasEl = $('#nota-alertas');
+    const txtArea = $('#nota-texto');
+    const s = semaforoActual();
+
+    const hayBloqueoRojo = s.nivel === 'rojo';
+    const tieneFilasIncompletas = state.rows.some((r) => r.dosisDiaria === '' || r.dosisDiaria == null || Number(r.dosisDiaria) <= 0);
+    const infusorValido = state.ultimo && Array.isArray(state.ultimo.farmacos) && state.ultimo.farmacos.length > 0 && !tieneFilasIncompletas ? state.ultimo : null;
+
+    let texto;
+    if (hayBloqueoRojo) {
+      const mot = s.alertas.filter((a) => a.nivel === 'rojo').map((a) => a.mensaje).join('\n- ');
+      texto = H.generarNota({
+        bloqueoActivo: true,
+        motivoBloqueo: mot,
+      });
+    } else if (!infusorValido) {
+      texto = H.generarNota({ infusor: null });
+    } else {
+      texto = H.generarNota({
+        infusor: infusorValido,
+        conversion: state.aplicada ? state.aplicada.conversion : null,
+        avisoFactor: avisoAplicada(),
+      });
+    }
+    if (txtArea) txtArea.value = texto;
+
+    if (alertasEl) {
+      if (hayBloqueoRojo) {
+        alertasEl.innerHTML = `<div class="alert rojo" role="alert"><strong>⛔ Preparación bloqueada</strong><p>Existen alertas de seguridad que impiden generar una receta válida.</p></div>`;
+      } else if (tieneFilasIncompletas && state.rows.length > 0) {
+        alertasEl.innerHTML = `<div class="alert ambar" role="alert"><strong>⚠️ Fármacos incompletos</strong><p>Hay fármacos añadidos sin dosis válida. Asigne dosis o elimine filas antes de copiar.</p></div>`;
+      } else if (!infusorValido) {
+        alertasEl.innerHTML = `<div class="alert ambar" role="alert"><strong>ℹ️ Infusor vacío</strong><p>Añada medicamentos con dosis en la pestaña de Infusor para completar la nota clínica.</p></div>`;
+      } else {
+        alertasEl.innerHTML = '';
+      }
+    }
+
+    if (estadoEl) {
+      if (hayBloqueoRojo) estadoEl.textContent = '⛔ Bloqueada por alertas de seguridad';
+      else if (!infusorValido) estadoEl.textContent = 'Pendiente de prescripción';
+      else estadoEl.textContent = `${infusorValido.farmacos.length} ${infusorValido.farmacos.length === 1 ? 'fármaco' : 'fármacos'} · ${fmt(infusorValido.dias)} días`;
+    }
+  }
+
+  function copiarTextoPlano(texto, elementoFallback) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(texto).catch(() => fallbackCopia(elementoFallback, texto));
+    }
+    return fallbackCopia(elementoFallback, texto);
+  }
+
+  function fallbackCopia(elemento, texto) {
+    return new Promise((resolve, reject) => {
+      try {
+        let textarea = elemento;
+        let creado = false;
+        if (!textarea || typeof textarea.select !== 'function') {
+          textarea = document.createElement('textarea');
+          textarea.value = texto;
+          textarea.style.position = 'fixed';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          creado = true;
+        }
+        textarea.focus();
+        textarea.select();
+        const ok = document.execCommand('copy');
+        if (creado) document.body.removeChild(textarea);
+        if (ok) resolve(); else reject(new Error('execCommand falló'));
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  let copiadoTimer = null;
   function ocultarIndicadorCopiado() {
     const badge = $('#nota-copiado-msg');
     const btn = $('#nota-copiar');
@@ -808,94 +1136,7 @@
     if (btn) btn.textContent = 'Copiar';
   }
 
-  function actualizarNota() {
-    ocultarIndicadorCopiado();
-    const sem = semaforoActual();
-    const rojo = sem.nivel === 'rojo';
-    const motivosRojo = sem.alertas.filter((a) => a.nivel === 'rojo').map((a) => a.mensaje);
-    const tieneFilasIncompletas = state.rows.some((r) => r.dosisDiaria === '' || r.dosisDiaria == null || Number(r.dosisDiaria) <= 0);
-    const infusorValido = state.ultimo && Array.isArray(state.ultimo.farmacos) && state.ultimo.farmacos.length > 0 && !tieneFilasIncompletas ? state.ultimo : null;
-    const d = {
-      infusor: infusorValido,
-      conversion: state.aplicada ? state.aplicada.conversion : null,
-      avisoFactor: avisoAplicada(),
-      bloqueoActivo: rojo,
-      motivoBloqueo: motivosRojo.join(' '),
-    };
-    $('#nota-texto').value = H.generarNota(d);
-    const bloqueado = rojo || !infusorValido;
-    $('#nota-estado').textContent = rojo
-      ? '⛔ Alerta roja activa: resuelva los bloqueos antes de copiar'
-      : (!infusorValido
-          ? 'Sin fármacos válidos o existen filas sin dosis en el infusor'
-          : (sem.nivel === 'ambar' ? '⚠️ Precaución clínica activa: revise las advertencias antes de copiar' : ''));
-    const alertasBox = $('#nota-alertas');
-    if (alertasBox) {
-      alertasBox.innerHTML = sem.alertas.length
-        ? sem.alertas.map((a) => `<div class="alert ${a.nivel}" role="alert"><strong>${a.nivel === 'rojo' ? '⛔ Alerta roja' : '⚠️ Precaución clínica antes de finalizar'}</strong><p>${esc(a.mensaje)}</p></div>`).join('')
-        : '';
-    }
-    $('#nota-copiar').setAttribute('aria-disabled', String(bloqueado));
-  }
-
-  /* Reinicia todos los módulos para no arrastrar datos entre pacientes. */
-  function nuevaConsulta() {
-    g.paso = 0; g.resp = {}; g.plan = null;
-    state.rows = [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: '' }];
-    state.parchesFentanilo = [{ parche: 25, cantidad: 1 }];
-    state.aplicada = null; state.conversion = null;
-    Object.keys(state.alertas).forEach((k) => { state.alertas[k] = []; });
-    state.diasSeleccionados = 5;
-    state.infusor = 'sfs2_250';
-    $('#c-llenado').value = '100'; $('#c-real').value = '100'; $('#c-ritmo').value = '2';
-    $('#opioide-select').value = 'fentanilo_td';
-    $('#opioide-dosis').value = ''; $('#opioide-reduccion').value = '0';
-    renderGuiado(); renderRows(); recalcular();
-    $('#opioide-select').dispatchEvent(new Event('change'));
-    actualizarNota();
-    switchTab('guiado');
-  }
-
-  function copiarConExecCommand(texto, fallbackTextarea) {
-    return new Promise((ok, ko) => {
-      const ta = fallbackTextarea || $('#nota-texto');
-      if (!ta) { ko(new Error('Sin elemento de texto')); return; }
-      const prev = ta.value;
-      const usarTemporal = fallbackTextarea == null && ta.value !== texto;
-      if (usarTemporal) ta.value = texto;
-      ta.focus();
-      ta.select();
-      try {
-        const exito = document.execCommand('copy');
-        if (usarTemporal) ta.value = prev;
-        if (exito) {
-          try {
-            ta.setSelectionRange(0, 0);
-            if (window.getSelection) window.getSelection().removeAllRanges();
-          } catch (_) { /* noop */ }
-          ok();
-        } else {
-          ko(new Error('copy_failed'));
-        }
-      } catch (e) {
-        if (usarTemporal) ta.value = prev;
-        ko(e);
-      }
-    });
-  }
-
-  function copiarTextoPlano(texto, fallbackTextarea) {
-    if (navigator.clipboard && window.isSecureContext && typeof navigator.clipboard.writeText === 'function') {
-      return navigator.clipboard.writeText(texto).catch(() => copiarConExecCommand(texto, fallbackTextarea));
-    }
-    return copiarConExecCommand(texto, fallbackTextarea);
-  }
-
   function initNota() {
-    const pre = document.createElement('pre');
-    pre.id = 'nota-print'; pre.className = 'print-only nota-print';
-    $('#nota-texto').insertAdjacentElement('afterend', pre);
-
     $('#nota-copiar').addEventListener('click', () => {
       actualizarNota();
       if (semaforoActual().nivel === 'rojo') {
@@ -904,7 +1145,7 @@
       }
       const tieneFilasIncompletas = state.rows.some((r) => r.dosisDiaria === '' || r.dosisDiaria == null || Number(r.dosisDiaria) <= 0);
       if (!state.ultimo || !state.ultimo.farmacos.length || tieneFilasIncompletas) {
-        toast('Configure al menos un fármaco con dosis válida (y sin filas vacías) antes de copiar');
+        toast('Configure al menos un fármaco con dosis válida antes de copiar');
         return;
       }
       copiarTextoPlano($('#nota-texto').value, $('#nota-texto')).then(
@@ -915,13 +1156,13 @@
           if (btn) btn.textContent = 'Copiado';
           clearTimeout(copiadoTimer);
           copiadoTimer = setTimeout(ocultarIndicadorCopiado, 3000);
-          toast('Copiado');
+          toast('Copiado al portapapeles');
         },
         () => {
           ocultarIndicadorCopiado();
           const ta = $('#nota-texto');
           if (ta) { ta.focus(); ta.select(); }
-          toast('No se pudo copiar automáticamente: texto seleccionado para copia manual', 4000);
+          toast('Texto seleccionado para copia manual', 4000);
         }
       );
     });
@@ -998,7 +1239,7 @@
         <h1>${esc(gu.titulo)}</h1>
         <p class="guia-sub">${esc(gu.subtitulo)}</p>
         ${guiaCuerpo(gu, 'h2')}
-        <footer class="print-pie">Documento generado con Hypnos ${esc(H.VERSION)} by ${esc(H.AUTOR)} · Entregado por su equipo de Cuidados Paliativos.</footer>
+        <footer class="print-pie">Documento generado con Hypnos ${esc(H.VERSION)} · Por ${esc(H.AUTOR)} · Cuidados Paliativos.</footer>
       </article>`;
     document.body.classList.add('imprimiendo-guia');
     window.print();
@@ -1030,8 +1271,11 @@
   /* ───────────── Impresión ───────────── */
   let desplegadosAlImprimir = [];
   function antesDeImprimir() {
-    $('#familias-print-cabecera').innerHTML = `<p class="print-inst">${esc(CABECERA_GUIAS)}</p><p class="print-fecha">Fecha: ${esc(fechaLarga())}</p>`;
-    $('#nota-print').textContent = $('#nota-texto').value;
+    const fc = $('#familias-print-cabecera');
+    if (fc) fc.innerHTML = `<p class="print-inst">${esc(CABECERA_GUIAS)}</p><p class="print-fecha">Fecha: ${esc(fechaLarga())}</p>`;
+    const np = $('#nota-print');
+    const nt = $('#nota-texto');
+    if (np && nt) np.textContent = nt.value;
     desplegadosAlImprimir = $$('main details:not([open])');
     desplegadosAlImprimir.forEach((d) => { d.open = true; });
   }

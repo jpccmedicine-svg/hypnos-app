@@ -1,4 +1,4 @@
-/* HYPNOS 2.2 — Motor algorítmico y de lógica clínica.
+/* HYPNOS 2.3 — Motor algorítmico y de lógica clínica.
  * Sin dependencias. Funciona en navegador (window.HypnosEngine) y Node (require).
  * Herramienta de apoyo a la decisión: NO sustituye el juicio clínico. */
 (function (root, factory) {
@@ -7,7 +7,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const VERSION = '2.2';
+  const VERSION = '2.3';
   const AUTOR = 'JP';
   const CONTACTO_EMAIL = 'jpccmedicine@gmail.com';
   const EPS = 1e-9;
@@ -72,6 +72,24 @@
       fechaConsulta: '2026-10-20',
       url: 'https://nipro-group.picturepark.com/v/QpF3WHTQ/B4F1A04743A21B8B22B5F5CF6983179BE5CD0CD0.pdf',
       ambito: 'Parámetros verificados en catálogo oficial Nipro Surefuser™+: SFS-2-25P-EJ (p. 3, Long-term Continuous Infusion: 250 ml nominales @ 2,0 ml/h, 5 días 5 h = 125 h, regulador amarillo, precisión ±10 %) y SMA-123-10P-EJ (p. 4, Variable Infusion: 100 ml nominales con selector regulado a 1,0 ml/h → 4 días 4 h = 100 h, regulador verde, precisión ±15 %).',
+    },
+    aemps_ketorolaco_70102: {
+      organismo: 'AEMPS / CIMA',
+      titulo: 'Ficha Técnica Ketorolaco trometamol Normon 30 mg/ml solución inyectable EFG (reg. 70102)',
+      secciones: 'Secciones 4.1 Indicaciones, 4.2 Posología y forma de administración, 4.3 Contraindicaciones y 4.4 Advertencias',
+      fechaRevision: '2025',
+      fechaConsulta: '2026-10-21',
+      url: 'https://cima.aemps.es/cima/dochtml/ft/70102/FT_70102.html',
+      ambito: 'España — Vías de administración aprobadas: exclusivamente intravenosa (IV) e intramuscular (IM). Vía subcutánea NO autorizada en ficha técnica. Duración parenteral acumulada limitada estrictamente a un máximo de 2 días (48 horas) por riesgo elevado de hemorragia digestiva y fracaso renal agudo. Incompatible con morfina y soluciones ácidas. Bloqueado en HYPNOS para infusión subcutánea continua.',
+    },
+    escala_ramsay_sedacion: {
+      organismo: 'BMJ / Manual Merck / INGESA / SECPAL',
+      titulo: 'Escala de Sedación de Ramsay (Ramsay MA et al., BMJ 1974; 2:656–659) y Guía de Sedación Paliativa (INGESA 2021)',
+      secciones: 'Evaluación y monitorización clínica del nivel de sedación en 6 niveles (1: vigilia ansiosa; 2: vigilia tranquila; 3: respuesta a órdenes verbales; 4: respuesta rápida a estímulos suaves; 5: respuesta lenta solo al dolor; 6: ausencia de respuesta)',
+      fechaRevision: '2021',
+      fechaConsulta: '2026-10-21',
+      url: 'https://ingesa.sanidad.gob.es/dam/jcr%3Afb7c58fd-1692-4e91-a307-7d5f9b30c74c/Guia_sedacion_paliativa.pdf',
+      ambito: 'Monitorización del nivel de consciencia en sedación paliativa. No determina por sí sola la indicación ni la dosificación.',
     },
     baxter_infusor: {
       organismo: 'Baxter',
@@ -217,21 +235,22 @@
     },
     dia_7: {
       id: 'dia_7',
-      nombre: 'Baxter Infusor LV1.5 7 días · 252 ml @ 1,5 ml/h (168 h)',
+      nombre: 'Baxter Infusor LV1.5 ~7 días · 250 ml @ 1,5 ml/h (~167 h)',
       fabricante: 'Baxter (Large Volume Infusor LV1.5 · ref. 2C1087KP)',
       referenciaFabricante: '2C1087KP',
       verificadoFabricante: true,
-      llenado: 252,
+      llenado: 250,
       llenadoMin: 227,
       maxLlenado: 300,
-      volumenReal: 252,
+      volumenReal: 250,
       ritmo: 1.5,
       minRitmo: 1.5,
       maxRitmo: 1.5,
       precisionPct: 10,
       diasCategoria: 7,
-      etiquetaCorta: 'Volumen: 252 ml · Caudal: 1,5 ml/h (168 h)',
-      fuente: 'Baxter Elastomeric Products Professional Guide (p. 15, Large Volume Infusor LV1.5, ref. 2C1087KP): llenado nominal 252 ml (mín. 227 ml, máx. 300 ml; esta pauta prepara 252 ml nominales), caudal 1,5 ml/h, duración 7 días (168 h, rango aceptable 152,7–186,7 h), precisión ±10 %.',
+      etiquetaCorta: 'Volumen: 250 ml · Caudal: 1,5 ml/h (~7 días)',
+      fuente:
+        'Baxter Elastomeric Products Professional Guide (p. 15, Large Volume Infusor LV1.5, ref. 2C1087KP): capacidad nominal 250 ml (rango admitido 227–300 ml; esta pauta prepara 250 ml de llenado nominal), caudal nominal 1,5 ml/h, duración calculada 166,7 h (~7 días / 6 días 22 h 40 min; rango admisible 152,7–186,7 h), precisión ±10 %. Se corrigió la designación de 252 ml eliminando la capacidad física ficticia (Corrección 12).',
     },
     custom: {
       id: 'custom',
@@ -261,6 +280,8 @@
       'Perfil heredado sfs2_252 retirado por seguridad: calculaba dosis para 252 ml (126 h) diluyendo hasta 250 ml (125 h). En el catálogo oficial Nipro Surefuser™+ (p. 3), el modelo SFS-2-25P-EJ es de 250 ml @ 2,0 ml/h (125 h, id "sfs2_250").',
     dia_60:
       'Perfil heredado dia_60 (60 ml @ 2,5 ml/h) retirado por no contar con referencia respaldada en los catálogos verificados (B. Braun enumera LT 60-12-S a 5 ml/h y LT 60-30-S a 2 ml/h). Utilice B. Braun Easypump® II LT 60-30-S (ref. 4540010) a 48 ml (dia_48, 24 h) o a 60 ml nominales (easypump_60_30, 30 h).',
+    capacidad_252:
+      'Capacidad física de 252 ml eliminada del catálogo: los dispositivos de gran volumen (Baxter LV y Nipro SFS-2) tienen capacidad nominal de 250 ml (o 240 ml). Calcular sobre 252 ml procedía de multiplicar 1,5 ml/h × 168 h, pero un depósito de 250 ml a 1,5 ml/h entrega un tiempo real de 166,67 h (~6 días 22 h 40 min). Use la entrada nominal verificada de 250 ml (dia_7).',
   };
 
   /* Límites operativos para validación de dispositivos y entradas personalizadas */
@@ -322,6 +343,239 @@
     return { horas, dias: horas / 24, infusor: inf };
   }
 
+
+  /* ───────────── Auditoría de catálogo farmacológico y Ketorolaco (HYP-008) ─────────────
+   * Contiene el análisis farmacológico de medicamentos consultados históricamente o fuera de indicación.
+   * Ketorolaco trometamol (reg. CIMA 70102): vías autorizadas IV e IM, limitado a 2 días parenteral.
+   * La vía subcutánea y la perfusión continua prolongada están fuera de ficha técnica («off-label»);
+   * permanecen bloqueadas en HYPNOS pendientes de validación clínica institucional. */
+  const CATALOGO_FARMACOLOGICO_AUDITADO = {
+    morfina: {
+      principioActivo: 'Morfina clorhidrato',
+      cima: ['42221', '42592', '82749'],
+      presentacionComercial: 'Ampollas 1% 10 mg/1 ml, 2% 40 mg/2 ml, Vial 2% 400 mg/20 ml (B. Braun)',
+      viasFichaTecnica: ['SC', 'IV', 'IM', 'epidural', 'intratecal'],
+      viaSubcutaneaEnFichaTecnica: true,
+      usoSubcutaneoPaliativo: 'Vía de elección en cuidados paliativos. Autorizada explícitamente en ficha técnica para administración subcutánea.',
+      estadoInfusor: 'aprobado_catalogo',
+      duracionParenteral: 'Tratamiento continuo o prolongado según evolución y requerimientos analgésicos.',
+      compatibilidades: 'Compatible con midazolam, butilescopolamina, haloperidol y levomepromazina en suero fisiológico 0,9%. Incompatible con dexametasona en infusiones > 24 h y con soluciones alcalinas.',
+    },
+    midazolam: {
+      principioActivo: 'Midazolam hidrocloruro',
+      cima: ['65314', '65796'],
+      presentacionComercial: 'Ampollas 5 mg/1 ml (Serraclinics), 15 mg/3 ml, 50 mg/10 ml (Normon)',
+      viasFichaTecnica: ['IV', 'IM', 'rectal'],
+      viaSubcutaneaEnFichaTecnica: false,
+      usoSubcutaneoPaliativo: 'Uso «off-label» plenamente protocolizado y respaldado por guías de práctica clínica (SECPAL, GuíaSalud/SNS, INGESA) para sedación paliativa, crisis de pánico y disnea refractaria.',
+      estadoInfusor: 'aprobado_catalogo',
+      duracionParenteral: 'Infusión continua en cuidados paliativos ajustada a respuesta clínica y monitorización de confort.',
+      compatibilidades: 'Compatible con morfina, butilescopolamina y haloperidol en suero fisiológico 0,9%.',
+    },
+    butilescopolamina: {
+      principioActivo: 'Butilbromuro de escopolamina',
+      cima: ['86236', '16568'],
+      presentacionComercial: 'Ampolla 20 mg/1 ml (Kalceks / Boehringer)',
+      viasFichaTecnica: ['SC', 'IV', 'IM'],
+      viaSubcutaneaEnFichaTecnica: true,
+      usoSubcutaneoPaliativo: 'Fármaco de elección para el control de estertores premortem y espasmos cólicos. Vía SC autorizada en ficha técnica.',
+      estadoInfusor: 'aprobado_catalogo',
+      duracionParenteral: 'Indicada durante la situación de últimos días o cuadros espásticos.',
+      compatibilidades: 'Compatible con morfina, midazolam y haloperidol. Antagónico con metoclopramida.',
+    },
+    haloperidol: {
+      principioActivo: 'Haloperidol',
+      cima: ['58345', '41183'],
+      presentacionComercial: 'Ampolla 5 mg/1 ml (Esteve)',
+      viasFichaTecnica: ['IM'],
+      viaSubcutaneaEnFichaTecnica: false,
+      usoSubcutaneoPaliativo: 'Uso «off-label» protocolizado de primera línea en delirium y antiemético en cuidados paliativos (SECPAL / GuíaSalud). Administración SC bien tolerada en infusor.',
+      estadoInfusor: 'aprobado_catalogo',
+      duracionParenteral: 'Delirium hiperactivo y náuseas/vómitos refractarios.',
+      compatibilidades: 'Compatible con morfina, midazolam y butilescopolamina. Evitar asociación con levomepromazina por duplicidad dopaminérgica.',
+    },
+    levomepromazina: {
+      principioActivo: 'Levomepromazina hidrocloruro',
+      cima: ['32262'],
+      presentacionComercial: 'Ampolla 25 mg/1 ml (Sinogan · Sanofi)',
+      viasFichaTecnica: ['IM'],
+      viaSubcutaneaEnFichaTecnica: false,
+      usoSubcutaneoPaliativo: 'Uso «off-label» protocolizado en cuidados paliativos para delirium refractario, náuseas refractarias y sedación paliativa de segunda línea (SECPAL).',
+      estadoInfusor: 'aprobado_catalogo',
+      duracionParenteral: 'Delirium refractario y sedación paliativa.',
+      compatibilidades: 'Compatible con morfina y midazolam. Precipita con dexametasona.',
+    },
+    dexametasona: {
+      principioActivo: 'Dexametasona fosfato disódico',
+      cima: ['36225'],
+      presentacionComercial: 'Ampolla 4 mg/1 ml (Fortecortín · Kern Pharma)',
+      viasFichaTecnica: ['IV', 'IM', 'intraarticular', 'intralesional'],
+      viaSubcutaneaEnFichaTecnica: false,
+      usoSubcutaneoPaliativo: 'Uso en bolo matutino independiente por vía SC. En infusor continuo genera riesgo físico-químico de precipitación a partir de 24 h.',
+      estadoInfusor: 'restringido_bolo_24h',
+      duracionParenteral: 'Preferir administración en bolo matutino subcutáneo independiente de 24 h.',
+      compatibilidades: 'Solución alcalina: precipita con facilidad al mezclarse con haloperidol, midazolam o levomepromazina.',
+    },
+    metoclopramida: {
+      principioActivo: 'Metoclopramida hidrocloruro',
+      cima: ['40256'],
+      presentacionComercial: 'Ampolla 10 mg/2 ml (Primperan · Sanofi)',
+      viasFichaTecnica: ['IV', 'IM'],
+      viasAprobadas: ['IV', 'IM'],
+      viaSubcutaneaEnFichaTecnica: false,
+      viaSubcutaneaAprobada: false,
+      usoSubcutaneoPaliativo: 'Uso «off-label» protocolizado en cuidados paliativos como procinético y antiemético por vía SC. Reducir dosis en insuficiencia renal grave.',
+      estadoInfusor: 'aprobado_catalogo',
+      duracionParenteral: 'Náuseas y gastroparesia. Ajustar al 50 % si FG < 30 ml/min y 75 % si ClCr < 15 ml/min.',
+      compatibilidades: 'Antagonismo procinético/anticolinérgico con butilescopolamina.',
+    },
+    ketorolaco: {
+      principioActivo: 'Ketorolaco trometamol',
+      cima: ['70102'],
+      presentacionComercial: 'Ketorolaco trometamol Normon 30 mg/ml solución inyectable EFG (reg. CIMA 70102)',
+      concentracion: '30 mg/1 ml',
+      mgPorAmpolla: 30,
+      mlPorAmpolla: 1,
+      viasFichaTecnica: ['IV', 'IM'],
+      viasAprobadas: ['IV', 'IM'],
+      viaSubcutaneaEnFichaTecnica: false,
+      viaSubcutaneaAprobada: false,
+      duracionMaximaParenteralDias: 2,
+      estadoInfusor: 'bloqueado_sc_offlabel',
+      pendienteValidacionClinica: true,
+      fechaRevisionFichaTecnica: 'Junio 2023',
+      motivoBloqueo:
+        'Ficha técnica AEMPS/CIMA (reg. 70102, rev. junio 2023) autoriza exclusivamente administración intravenosa e intramuscular y fija una duración parenteral máxima estricta de 2 días (48 horas) por riesgo elevado de hemorragia digestiva grave y fracaso renal agudo. ' +
+        'La vía subcutánea no está autorizada en ficha técnica. Su empleo en infusión subcutánea continua mediante infusor elastomérico constituye un uso fuera de indicación («off-label») no validado por este motor, por lo que permanece bloqueado en el catálogo general.',
+      compatibilidades: 'Incompatible con morfina en mezclas concentradas o de pequeño volumen (jeringas); incompatible con soluciones ácidas. Riesgo de precipitación química.',
+      referenciaOficial: 'https://cima.aemps.es/cima/dochtml/ft/70102/FT_70102.html',
+    },
+  };
+  /* ───────────── Escala de Sedación de Ramsay (HYP-009) ─────────────
+   * 6 niveles validados según Ramsay MA et al., BMJ 1974; Manual Merck y Guía de Sedación Paliativa INGESA 2021 / SECPAL.
+   * Diseñada para registrar nivel observado y objetivo, recoger preferencias y voluntades anticipadas,
+   * con advertencia clínica obligatoria de no prescripción automática. */
+  const ESCALA_RAMSAY = {
+    nombre: 'Escala de Sedación de Ramsay',
+    fuente: 'Ramsay MA, Savege TM, Simpson BR, Goodwin R. Controlled sedation with alphaxalone-alphadolone. BMJ 1974; 2(5920):656-659. Manual Merck y SECPAL.',
+    niveles: [
+      {
+        nivel: 1,
+        categoria: 'vigilia_ansiosa',
+        titulo: 'Nivel 1: Despierto; ansioso, agitado o inquieto',
+        descripcion: 'Paciente despierto, angustiado, inquieto o agitado.',
+        estadoClinico: 'Vigilia con malestar emocional o físico activo; sin sedación o con sedación insuficiente.',
+        criterioOriginal: 'Anxious and agitated or restless, or both (BMJ 1974).',
+        objetivoHabitual: false,
+      },
+      {
+        nivel: 2,
+        categoria: 'vigilia_tranquila',
+        titulo: 'Nivel 2: Despierto; colaborador, orientado y tranquilo',
+        descripcion: 'Paciente despierto, colaborador, orientado y tranquilo.',
+        estadoClinico: 'Estado óptimo de confort vigil cuando los síntomas refractarios están controlados sin pérdida de consciencia.',
+        criterioOriginal: 'Co-operative, orientated, and tranquil (BMJ 1974).',
+        objetivoHabitual: true,
+      },
+      {
+        nivel: 3,
+        categoria: 'sedacion_consciente',
+        titulo: 'Nivel 3: Dormido; responde solo a órdenes verbales simples',
+        descripcion: 'Paciente dormido; despierta fácilmente y responde a estímulos u órdenes verbales claras.',
+        estadoClinico: 'Sedación consciente / superficial. Permite comunicación intermitente según deseos del paciente y la familia.',
+        criterioOriginal: 'Responding to commands only (BMJ 1974).',
+        objetivoHabitual: true,
+      },
+      {
+        nivel: 4,
+        categoria: 'sedacion_intermedia',
+        titulo: 'Nivel 4: Dormido; respuesta rápida a percusión glabelar ligera o estímulo auditivo',
+        descripcion: 'Paciente dormido; respuesta viva o rápida a percusión glabelar ligera o estímulo sonoro intenso.',
+        estadoClinico: 'Sedación intermedia; alivio de distrés severo manteniendo reactividad refleja rápida.',
+        criterioOriginal: 'A brisk response to a light glabellar tap or loud auditory stimulus (BMJ 1974).',
+        objetivoHabitual: true,
+      },
+      {
+        nivel: 5,
+        categoria: 'sedacion_profunda',
+        titulo: 'Nivel 5: Dormido; respuesta lenta/perezosa a percusión glabelar ligera o estímulo auditivo',
+        descripcion: 'Paciente dormido; respuesta perezosa o lenta a percusión glabelar ligera o estímulo sonoro intenso. No responde a la voz.',
+        estadoClinico: 'Sedación profunda transitoria o continua para sufrimiento refractario grave e intolerable.',
+        criterioOriginal: 'A sluggish response to a light glabellar tap or loud auditory stimulus (BMJ 1974).',
+        objetivoHabitual: true,
+      },
+      {
+        nivel: 6,
+        categoria: 'sedacion_muy_profunda',
+        titulo: 'Nivel 6: Dormido profundo; ausencia total de respuesta a estímulos',
+        descripcion: 'Paciente dormido profundo; ausencia de respuesta a la percusión glabelar o estímulos auditivos.',
+        estadoClinico: 'Sedación muy profunda / coma farmacológico. Requiere estrecha vigilancia para evitar depresión excesiva innecesaria.',
+        criterioOriginal: 'No response to a light glabellar tap or loud auditory stimulus (BMJ 1974).',
+        objetivoHabitual: false,
+      },
+    ],
+    advertenciaClinica:
+      'La escala de Ramsay evalúa exclusivamente el nivel de sedación o profundidad alcanzado, pero NO determina por sí sola la indicación clínica, la dosis de fármacos ni la proporcionalidad de la sedación paliativa. ' +
+      'La sedación paliativa exige la presencia documentada de síntomas refractarios con sufrimiento intolerable, el consenso explícito del equipo asistencial, y el consentimiento informado del paciente o de sus representantes legales / voluntades anticipadas. ' +
+      'La selección de un nivel no desencadena pautas ni dosis automáticas.',
+  };
+
+  function evaluarRamsay(datos = {}) {
+    const obs = Number(datos.nivelObservado);
+    const obj = datos.nivelObjetivo != null && datos.nivelObjetivo !== '' ? Number(datos.nivelObjetivo) : null;
+    const nivelObsValido = Number.isInteger(obs) && obs >= 1 && obs <= 6;
+    const nivelObjValido = obj === null || (Number.isInteger(obj) && obj >= 1 && obj <= 6);
+
+    if (!nivelObsValido) {
+      return {
+        valido: false,
+        error: 'Debe seleccionar un nivel de Ramsay observado válido (1 a 6).',
+        escala: ESCALA_RAMSAY,
+      };
+    }
+    if (!nivelObjValido) {
+      return {
+        valido: false,
+        error: 'El nivel de Ramsay objetivo debe estar entre 1 y 6.',
+        escala: ESCALA_RAMSAY,
+      };
+    }
+
+    const itemObs = ESCALA_RAMSAY.niveles.find((n) => n.nivel === obs);
+    const itemObj = obj !== null ? ESCALA_RAMSAY.niveles.find((n) => n.nivel === obj) : null;
+
+    let concordancia = 'observacion_aislada';
+    let mensajeConcordancia = 'Nivel registrado sin objetivo previo especificado.';
+    if (itemObj) {
+      if (obs === obj) {
+        concordancia = 'en_objetivo';
+        mensajeConcordancia = `El nivel observado (${obs}) coincide con el nivel objetivo establecido (${obj}).`;
+      } else if (obs < obj) {
+        concordancia = 'infrasedacion';
+        mensajeConcordancia = `Nivel observado (${obs}: ${itemObs.titulo}) más superficial que el objetivo previsto (${obj}: ${itemObj.titulo}). Reevaluar el distrés del paciente y considerar si el nivel actual es clínicamente confortable.`;
+      } else {
+        concordancia = 'sobresedacion';
+        mensajeConcordancia = `Nivel observado (${obs}: ${itemObs.titulo}) más profundo que el objetivo previsto (${obj}: ${itemObj.titulo}). Evaluar el grado de consciencia y comunicación deseado por el paciente y su familia.`;
+      }
+    }
+
+    return {
+      valido: true,
+      nivelObservado: obs,
+      itemObservado: itemObs,
+      nivelObjetivo: obj,
+      itemObjetivo: itemObj,
+      concordancia,
+      mensajeConcordancia,
+      preferenciasPaciente: datos.preferenciasPaciente || null,
+      voluntadesAnticipadas: Boolean(datos.voluntadesAnticipadas),
+      representanteLegal: Boolean(datos.representanteLegal),
+      consentimientoDocumentado: Boolean(datos.consentimientoDocumentado),
+      reevaluacionConfort: datos.reevaluacionConfort || null,
+      advertencia: ESCALA_RAMSAY.advertenciaClinica,
+      fuente: ESCALA_RAMSAY.fuente,
+    };
+  }
   /* ───────────── Fármacos ─────────────
    * Presentaciones comerciales verificadas en España (AEMPS/CIMA):
    * - Morfina B. Braun 10 mg/1 ml (reg. 42221), 40 mg/2 ml (reg. 42592), Morfina B. Braun 20 mg/ml solución inyectable en vial de 20 ml · 400 mg/20 ml (reg. 82749).
@@ -434,6 +688,16 @@
       }
     }
 
+    // Desglose matemático explícito de operaciones utilizadas (Corrección 1)
+    const operaciones = {
+      concentracion: `${presentacion.mg} mg / ${presentacion.ml} ml = ${fmt(concentracion)} mg/ml`,
+      dosisAcumulada: `${fmt(dosisDiaria)} mg/día × ${fmt(dias)} días = ${fmt(totalMg)} mg`,
+      volumenAspirar: `${fmt(totalMg)} mg ÷ ${fmt(concentracion)} mg/ml = ${fmt(volumenAspirar)} ml`,
+      ampollas: `ceil(${fmt(volumenAspirar)} ml ÷ ${presentacion.ml} ml) = ${ampollas} ${tipoEnvase === 'vial' ? (ampollas === 1 ? 'vial' : 'viales') : 'ampollas'}`,
+      volumenEnvases: `${ampollas} × ${presentacion.ml} ml = ${fmt(volumenTotalAmpollas)} ml`,
+      sobrante: sobraContenido ? `${fmt(volumenTotalAmpollas)} ml - ${fmt(volumenAspirar)} ml = ${fmt(volumenSobrante)} ml` : '0 ml (sin sobrante)',
+    };
+
     return {
       farmaco: farmaco.id,
       nombre: farmaco.nombre,
@@ -454,6 +718,7 @@
       volumenTotalAmpollas,
       volumenSobrante,
       rescate,
+      operaciones,
     };
   }
 
@@ -732,6 +997,13 @@
       metadona: Boolean(entrada.metadona),
     });
 
+    const operaciones = {
+      duracion: `${fmt(inf.volumenReal)} ml ÷ ${fmt(inf.ritmo)} ml/h = ${fmt(horas)} h (${fmt(dias)} días)`,
+      volumenFarmacos: `Σ volúmenes de fármacos = ${fmt(volumenAspirado)} ml`,
+      diluyente: `${fmt(inf.llenado)} ml (llenado) - ${fmt(volumenAspirado)} ml (fármacos) = ${fmt(suero)} ml de Suero Fisiológico 0,9 %`,
+      volumenFinal: `${fmt(volumenAspirado)} ml (fármacos) + ${fmt(suero)} ml (suero) = ${fmt(volumenFinal)} ml`,
+    };
+
     return {
       infusor: inf,
       horas,
@@ -743,6 +1015,7 @@
       volumenFinal,
       volumenExcedido,
       semaforo,
+      operaciones,
     };
   }
 
@@ -758,11 +1031,11 @@
    *   Por encima de 150 µg/h se registra el desglose y la suma en µg/h, pero NO se extrapola ni transfiere
    *   automáticamente una dosis de morfina no validada en la tabla oficial. */
   const PRESENTACIONES_FENTANILO_TD = [
-    { id: 'fent_12_5', denominacion: '12', liberacion: 12.5, label: '12 µg/h (liberación real 12,5 µg/h)', morfinaOralTabulada: 30 },
-    { id: 'fent_25', denominacion: '25', liberacion: 25, label: '25 µg/h', morfinaOralTabulada: 60 },
-    { id: 'fent_50', denominacion: '50', liberacion: 50, label: '50 µg/h', morfinaOralTabulada: 120 },
-    { id: 'fent_75', denominacion: '75', liberacion: 75, label: '75 µg/h', morfinaOralTabulada: 180 },
-    { id: 'fent_100', denominacion: '100', liberacion: 100, label: '100 µg/h', morfinaOralTabulada: 240 },
+    { id: 'fent_12_5', denominacion: '12', liberacion: 12.5, liberacionReal: 12.5, label: '12 µg/h (liberación real 12,5 µg/h)', etiqueta: '12 µg/h (libera 12,5 µg/h)', morfinaOralTabulada: 30 },
+    { id: 'fent_25', denominacion: '25', liberacion: 25, liberacionReal: 25, label: '25 µg/h', etiqueta: '25 µg/h', morfinaOralTabulada: 60 },
+    { id: 'fent_50', denominacion: '50', liberacion: 50, liberacionReal: 50, label: '50 µg/h', etiqueta: '50 µg/h', morfinaOralTabulada: 120 },
+    { id: 'fent_75', denominacion: '75', liberacion: 75, liberacionReal: 75, label: '75 µg/h', etiqueta: '75 µg/h', morfinaOralTabulada: 180 },
+    { id: 'fent_100', denominacion: '100', liberacion: 100, liberacionReal: 100, label: '100 µg/h', etiqueta: '100 µg/h', morfinaOralTabulada: 240 },
   ];
 
   const OPIOIDES = {
@@ -1106,8 +1379,9 @@
   /* ───────────── Modo Guiado SECPAL (5 preguntas) ───────────── */
   const GUIA_PASOS = [
     { id: 'contexto', tipo: 'single', titulo: '1 · ¿En qué situación clínica se encuentra el paciente?', opciones: [
-      { valor: 'agonia', label: 'Situación de últimos días / agonía', desc: 'Deterioro irreversible, horas o pocos días.' },
-      { valor: 'control', label: 'Control de síntomas en domicilio / planta', desc: 'Necesita ajuste sintomático sin signos de agonía inmediata.' },
+      { valor: 'agonia', label: 'Situación de últimos días / agonía', desc: 'Deterioro funcional irreversible, pronóstico de horas o pocos días.' },
+      { valor: 'refractario', label: 'Síntoma refractario (sufrimiento no controlable tras medidas plenas)', desc: 'Síntoma que no responde a los tratamientos habituales aplicados por expertos; criterio previo obligatorio para valorar sedación paliativa proporcional según protocolo SECPAL.' },
+      { valor: 'control', label: 'Ajuste de síntomas / síntoma de difícil control', desc: 'Enfermedad avanzada con necesidad de optimización terapéutica intensiva antes de declarar refractariedad.' },
     ] },
     { id: 'via', tipo: 'single', titulo: '2 · ¿Dispone de vía oral efectiva y segura?', opciones: [
       { valor: 'sc', label: 'No → usar vía subcutánea (infusor / palomita)', desc: 'Disfagia, vómitos, bajo nivel de consciencia o agonía.' },
@@ -1186,6 +1460,11 @@
       medidas.push('Retirar fármacos no esenciales; suspender vía oral no segura.');
       medidas.push('Cuidados de boca, posición cómoda, retirar sondas o pruebas innecesarias.');
       medidas.push('Informar a la familia y ofrecer acompañamiento (pestaña 5).');
+    }
+    if (r.contexto === 'refractario') {
+      medidas.push('Reevaluar etiología y causas reversibles del síntoma antes de declarar refractariedad.');
+      medidas.push('Valorar interconsulta con Unidad de Cuidados Paliativos / Equipo de Soporte.');
+      medidas.push('Optimizar dosis basales y rescates orales/subcutáneos antes de escalada invasiva.');
     }
     if (r.via === 'sc' || r.contexto === 'agonia') medidas.push('Vía subcutánea con palomita (mariposa) en zona torácica/abdominal/muslo; rotar cada 5–7 días o si hay reacción.');
     else medidas.push('Mantener vía oral mientras sea segura.');
@@ -1489,6 +1768,9 @@
     INFUSORES_BLOQUEADOS,
     LIMITES_INFUSOR_FABRICANTE,
     FARMACOS,
+    CATALOGO_FARMACOLOGICO_AUDITADO,
+    ESCALA_RAMSAY,
+    evaluarRamsay,
     OPIOIDES,
     PRESENTACIONES_FENTANILO_TD,
     GUIA_PASOS,
