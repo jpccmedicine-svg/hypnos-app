@@ -518,9 +518,9 @@ test('HYP-005: nota clínica incluye resumen del infusor actual (fármacos, dosi
   const n = H.generarNota({ infusor: testigo });
   assert.ok(/NOTA CLÍNICA · INFUSOR ACTUAL \(Hypnos (2\.2|2\.3)\)/.test(n));
   assert.ok(/Dispositivo: Surefuser™\+ SFS-2-25P-EJ · 250 ml @ 2 ml\/h \(125 h\)/.test(n));
-  assert.ok(/Duración: 125 h \(5,21 días\) · Caudal: 2 ml\/h/.test(n));
+  assert.ok(/Duración nominal: 5 días · Caudal: 2 ml\/h/.test(n));
   assert.ok(/Llenado nominal: 250 ml/.test(n));
-  assert.ok(/Morfina clorhidrato \(Ampolla 2% · 40 mg\/2 ml\): 60 mg\/24 h \(total 312,5 mg en 5,21 días\) · Añadir al infusor: 15,63 ml · Abrir: 8 ampollas/.test(n));
+  assert.ok(/Morfina clorhidrato \(Ampolla 2% · 40 mg\/2 ml\): 60 mg\/24 h \(total 312,5 mg\) · Añadir al infusor: 15,63 ml · Abrir: 8 ampollas/.test(n));
   assert.ok(/Diluyente \(Suero fisiológico 0,9 %\): 234,38 ml/.test(n));
   assert.ok(/Volumen final preparado: 250 ml/.test(n));
   assert.ok(/cada 4 h si dolor o disnea/.test(n));

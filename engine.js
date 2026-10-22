@@ -1549,7 +1549,7 @@
       L.push('');
       L.push('DISPOSITIVO Y DURACIÓN:');
       L.push('- Dispositivo: ' + r.infusor.nombre);
-      L.push('- Duración: ' + fmt(r.horas) + ' h (' + fmt(r.dias) + ' días) · Caudal: ' + fmt(r.infusor.ritmo) + ' ml/h');
+      L.push('- Duración nominal: ' + fmt(r.infusor.diasCategoria || Math.round(r.dias)) + ' días · Caudal: ' + fmt(r.infusor.ritmo) + ' ml/h');
       L.push('- Llenado nominal: ' + fmt(r.infusor.llenado) + ' ml' +
         (r.infusor.volumenReal !== r.infusor.llenado ? ' · Volumen real: ' + fmt(r.infusor.volumenReal) + ' ml' : ''));
       L.push('');
@@ -1557,7 +1557,7 @@
       r.farmacos.forEach((f) => {
         const envTxt = f.tipoEnvase === 'vial' ? (f.ampollas === 1 ? 'vial' : 'viales') : 'ampollas';
         L.push('- ' + f.nombre + ' (' + f.presentacion.label + '): ' +
-          fmt(f.dosisDiaria) + ' mg/24 h (total ' + fmt(f.totalMg) + ' mg en ' + fmt(r.dias) + ' días) · ' +
+          fmt(f.dosisDiaria) + ' mg/24 h (total ' + fmt(f.totalMg) + ' mg) · ' +
           'Añadir al infusor: ' + fmt(f.volumenAspirar) + ' ml · Abrir: ' + f.ampollas + ' ' + envTxt);
       });
       L.push('');

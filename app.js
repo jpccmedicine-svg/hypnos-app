@@ -371,8 +371,8 @@
     const inf = d.infusor;
     el.innerHTML = `
       <div class="kpi-item">
-        <dt class="kpi-label">Duración real</dt>
-        <dd class="kpi-val"><strong>${fmt(d.horas)} h</strong> <span class="kpi-sub">(${fmt(d.dias)} días)</span></dd>
+        <dt class="kpi-label">Duración nominal</dt>
+        <dd class="kpi-val"><strong>${fmt(inf.diasCategoria || Math.round(d.dias))} días</strong></dd>
       </div>
       <div class="kpi-item">
         <dt class="kpi-label">Volumen llenado</dt>
@@ -445,7 +445,7 @@
         <div class="prep-acciones">
           <span class="prep-dato">Añadir al infusor: <strong>${fmt(f.volumenIncorporar)} ml</strong></span>
           <span class="prep-dato">Abrir: <strong>${f.ampollas} ${f.tipoEnvase === 'vial' ? (f.ampollas === 1 ? 'vial' : 'viales') : 'ampollas'}</strong></span>
-          ${f.sobraContenido ? `<span class="prep-sobrante">${esc(f.notaSobrante)} (${fmt(f.volumenSobrante)} ml sobrantes)</span>` : ''}
+          ${f.sobraContenido ? `<span class="prep-sobrante">Habrá sobrante en ${f.tipoEnvase === 'vial' ? 'el vial' : 'la ampolla'}</span>` : ''}
         </div>
       </li>`).join('');
     return `
@@ -464,7 +464,7 @@
           <td>${fmt(f.totalMg)} mg</td>
           <td><strong>${fmt(f.volumenIncorporar)} ml</strong></td>
           <td>${f.ampollas} ${envTxt}</td>
-          <td>${fmt(f.volumenSobrante)} ml</td></tr>`;
+          <td>${f.sobraContenido ? (f.tipoEnvase === 'vial' ? 'Habrá sobrante en el vial' : 'Habrá sobrante en la ampolla') : 'Sin sobrante'}</td></tr>`;
     }).join('');
     return `
       <div class="tabla-wrap"><table class="tabla">
@@ -486,11 +486,11 @@
         </div>
         <div class="desglose-grid">
           <div class="d-item"><span class="d-lbl">Concentración:</span> <code class="d-val">${esc(f.operaciones.concentracion)}</code></div>
-          <div class="d-item"><span class="d-lbl">Dosis acumulada (${fmt(r.dias)} d):</span> <code class="d-val">${esc(f.operaciones.dosisAcumulada)}</code></div>
+          <div class="d-item"><span class="d-lbl">Dosis acumulada:</span> <code class="d-val">${fmt(f.totalMg)} mg totales</code></div>
           <div class="d-item"><span class="d-lbl">Volumen a extraer:</span> <code class="d-val">${esc(f.operaciones.volumenAspirar)}</code></div>
           <div class="d-item"><span class="d-lbl">Envases a abrir:</span> <code class="d-val">${esc(f.operaciones.ampollas)}</code></div>
           <div class="d-item"><span class="d-lbl">Volumen en envases:</span> <code class="d-val">${esc(f.operaciones.volumenEnvases)}</code></div>
-          <div class="d-item"><span class="d-lbl">Sobrante a desechar:</span> <code class="d-val">${esc(f.operaciones.sobrante)}</code></div>
+          ${f.sobraContenido ? `<div class="d-item"><span class="prep-sobrante">Habrá sobrante en ${f.tipoEnvase === 'vial' ? 'el vial' : 'la ampolla'}.</span></div>` : ''}
         </div>
       </div>
     `).join('');
@@ -502,7 +502,7 @@
           <span class="desglose-badge">Aritmética verificada</span>
         </summary>
         <div class="desglose-cuerpo">
-          <p class="muted">Operaciones exactas utilizadas para el cálculo de masa acumulada, volumen a aspirar y diluyente según la duración real calculada (${fmt(r.horas)} h / ${fmt(r.dias)} días a ${fmt(r.infusor.ritmo)} ml/h):</p>
+          <p class="muted">Operaciones exactas utilizadas para el cálculo de masa acumulada, volumen a aspirar y diluyente para el infusor de ${fmt(r.infusor.diasCategoria || Math.round(r.dias))} días nominales, según su volumen de llenado y caudal de ${fmt(r.infusor.ritmo)} ml/h:</p>
           <div class="desglose-farmacos-lista">${farmacosOps}</div>
           <div class="desglose-dispositivo-box">
             <h5>Balance volumétrico del infusor</h5>
@@ -510,7 +510,7 @@
               <div class="d-item"><span class="d-lbl">Volumen total de fármacos:</span> <code class="d-val">${esc(r.operaciones.volumenFarmacos)}</code></div>
               <div class="d-item"><span class="d-lbl">Diluyente (Suero Fisiológico 0,9 %):</span> <code class="d-val">${esc(r.operaciones.diluyente)}</code></div>
               <div class="d-item"><span class="d-lbl">Volumen final preparado:</span> <code class="d-val">${esc(r.operaciones.volumenFinal)}</code></div>
-              <div class="d-item"><span class="d-lbl">Duración y ritmo:</span> <code class="d-val">${esc(r.operaciones.duracion)}</code></div>
+              <div class="d-item"><span class="d-lbl">Duración y ritmo:</span> <code class="d-val">${fmt(r.infusor.diasCategoria || Math.round(r.dias))} días nominales · ${fmt(r.infusor.ritmo)} ml/h</code></div>
             </div>
           </div>
         </div>
@@ -1254,7 +1254,7 @@
     if (estadoEl) {
       if (hayBloqueoRojo) estadoEl.textContent = '⛔ Bloqueada por alertas de seguridad';
       else if (!infusorValido) estadoEl.textContent = 'Pendiente de prescripción';
-      else estadoEl.textContent = `${infusorValido.farmacos.length} ${infusorValido.farmacos.length === 1 ? 'fármaco' : 'fármacos'} · ${fmt(infusorValido.dias)} días`;
+      else estadoEl.textContent = `${infusorValido.farmacos.length} ${infusorValido.farmacos.length === 1 ? 'fármaco' : 'fármacos'} · ${fmt(infusorValido.infusor.diasCategoria || Math.round(infusorValido.dias))} días`;
     }
   }
 
