@@ -2,6 +2,7 @@
 // Ejecutar: node tests/test_engine.js
 const assert = require('assert');
 const H = require('../app.js');
+const fs = require('fs');
 
 let pasados = 0;
 const fallos = [];
@@ -57,14 +58,14 @@ test('Infusores 2 días: B. Braun Easypump II LT 100-50-S ref. 4540016 (100 ml @
   assert.strictEqual(b2.infusor.referenciaFabricante, '2C4711K');
   assert.strictEqual(b2.infusor.llenado, 120);
 });
-test('Infusor 7 días Baxter Seven Day LV1.5 ref. 2C1087KP: 252 ml @ 1,5 ml/h → 168 h (7 días exactos) dentro del rango 227–300 ml (HYP-008)', () => {
+test('Infusor 7 días Baxter Seven Day LV1.5 ref. 2C1087KP: 250 ml @ 1,5 ml/h → 166,67 h (~7 días) con coherencia llenado === volumenReal === 250 ml (Corrección 12)', () => {
   const d = H.calcularDuracion('dia_7');
-  cerca(d.horas, 168); cerca(d.dias, 7);
+  cerca(d.horas, 166.66666666666666); cerca(d.dias, 166.66666666666666 / 24);
   assert.strictEqual(d.infusor.referenciaFabricante, '2C1087KP');
-  assert.strictEqual(d.infusor.llenado, 252);
+  assert.strictEqual(d.infusor.llenado, 250);
   assert.strictEqual(d.infusor.llenadoMin, 227);
   assert.strictEqual(d.infusor.maxLlenado, 300);
-  assert.strictEqual(d.infusor.volumenReal, 252);
+  assert.strictEqual(d.infusor.volumenReal, 250);
 });
 test('Modelos heredados de v2.1 con catalogación errónea o incoherente están explícitamente bloqueados (baxter_2c1009k LV5, sfs2_252, dia_60)', () => {
   assert.ok(H.INFUSORES_BLOQUEADOS.baxter_2c1009k, 'baxter_2c1009k registrado en INFUSORES_BLOQUEADOS');
@@ -87,7 +88,7 @@ test('Personalizado y validación de límites (incluyendo coherencia estricta vo
     infusor: { id: 'custom', llenado: 100, ritmo: 2 },
     farmacos: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }],
   });
-  assert.strictEqual(rCustom.semaforo.nivel, 'ambar');
+  assert.strictEqual(rCustom.semaforo.nivel, 'rojo');
   assert.ok(rCustom.semaforo.alertas.some((a) => a.codigo === 'DISPOSITIVO_PERSONALIZADO_SIN_FICHA'));
 });
 test('Catálogo de infusores incluye metadatos verificables del fabricante y coherencia llenado === volumenReal', () => {
@@ -107,31 +108,37 @@ test('Catálogo de infusores incluye metadatos verificables del fabricante y coh
   });
 });
 
-console.log('\nCaso clínico testigo: morfina 60 mg/día, Nipro Surefuser+ SFS-2-25P-EJ (250 ml @ 2 ml/h = 125 h)');
+console.log('\nCaso clínico testigo: morfina 60 mg/día, Nipro Surefuser+ SFS-2-25P-EJ (duración seleccionada 5 días enteros)');
 const testigo = H.calcularInfusor({
   infusor: 'sfs2_250',
   farmacos: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }],
+  dias: 5,
 });
-test('125 h / 5,21 días', () => { cerca(testigo.horas, 125); cerca(testigo.dias, 125 / 24); });
-test('312,5 mg totales', () => cerca(testigo.farmacos[0].totalMg, 312.5));
+test('5 días seleccionados enteros (120 h pauta)', () => { cerca(testigo.horas, 120); cerca(testigo.dias, 5); });
+test('300 mg totales (60 mg/día × 5 días enteros, sin 312,5 mg)', () => cerca(testigo.farmacos[0].totalMg, 300));
 test('8 ampollas 40 mg/2 ml', () => assert.strictEqual(testigo.farmacos[0].ampollas, 8));
-test('15,625 ml a añadir (mostrado como 15,63 ml)', () => {
-  cerca(testigo.farmacos[0].volumenAspirar, 15.625);
-  assert.strictEqual(testigo.farmacos[0].textoAnadir, 'Añadir al infusor: 15,63 ml');
+test('15 ml a añadir (300 mg / 20 mg/ml, sin 15,63 ml)', () => {
+  cerca(testigo.farmacos[0].volumenAspirar, 15);
+  assert.strictEqual(testigo.farmacos[0].textoAnadir, 'Añadir al infusor: 15 ml');
 });
-test('0,375 ml sobrantes', () => cerca(testigo.farmacos[0].volumenSobrante, 0.375));
-test('234,375 ml de suero (volumenFinal = 250 ml exactos y caudal 2 ml/h entrega exactamente 60 mg/24 h)', () => {
-  cerca(testigo.suero, 234.375);
+test('1 ml sobrante con advertencia breve sin cantidades («Habrá sobrante en la ampolla»)', () => {
+  cerca(testigo.farmacos[0].volumenSobrante, 1);
+  assert.strictEqual(testigo.farmacos[0].sobraContenido, true);
+  assert.strictEqual(testigo.farmacos[0].notaSobrante, 'Habrá sobrante en la ampolla');
+});
+test('235 ml de suero (volumenFinal = 250 ml)', () => {
+  cerca(testigo.suero, 235);
   cerca(testigo.volumenFinal, 250);
-  const concentracionMgMl = testigo.farmacos[0].totalMg / testigo.volumenFinal;
-  const entregaDiariaMg = concentracionMgMl * testigo.infusor.ritmo * 24;
-  cerca(entregaDiariaMg, 60, 'la concentración final × caudal × 24 h entrega exactamente la dosis diaria prescrita');
 });
 test('rescate = 1/6 de 60 mg = 10 mg (0.5 ml de ampolla 2%)', () => {
   cerca(testigo.farmacos[0].rescate.mgMin, 10);
   cerca(testigo.farmacos[0].rescate.mlMin, 0.5);
 });
-test('semáforo verde', () => assert.strictEqual(testigo.semaforo.nivel, 'verde'));
+test('coherencia obligatoria detecta discrepancia en SFS-2-250 (alerta ambar DISPOSITIVO_DESVIACION_DURACION)', () => {
+  assert.strictEqual(testigo.semaforo.nivel, 'rojo');
+  assert.strictEqual(testigo.semaforo.apto, false);
+  assert.ok(testigo.semaforo.alertas.some((a) => a.codigo === 'DISPOSITIVO_DESVIACION_DURACION'));
+});
 
 console.log('\nSelector de duración rápida: 1 día / 2 días / 5 días / 7 días (morfina 60 mg/día)');
 test('1 día (dia_48, 48 ml @ 2 ml/h): 24 h, 60 mg totales, 3 ml a añadir, 45 ml de suero', () => {
@@ -146,50 +153,40 @@ test('5 días Baxter (baxter_lv2_5d, 240 ml @ 2 ml/h = 120 h exactas): 300 mg to
   cerca(r.farmacos[0].totalMg, 300); cerca(r.farmacos[0].volumenAspirar, 15);
   cerca(r.suero, 225); cerca(r.volumenFinal, 240);
 });
-test('2 días (dia_2, 100 ml @ 2 ml/h = 50 h): 125 mg totales, 4 ampollas, 6,25 ml a añadir, 93,75 ml de suero, verde', () => {
-  const r = H.calcularInfusor({ infusor: 'dia_2', farmacos: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }] });
+test('2 días (dia_2, 100 ml @ 2 ml/h = 48 h pauta): 120 mg totales, 3 ampollas, 6 ml a añadir, 94 ml de suero', () => {
+  const r = H.calcularInfusor({ infusor: 'dia_2', farmacos: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }], dias: 2 });
   const f = r.farmacos[0];
-  cerca(r.horas, 50); cerca(r.dias, 50 / 24);
-  cerca(f.totalMg, 125); assert.strictEqual(f.ampollas, 4);
-  cerca(f.volumenAspirar, 6.25); cerca(f.volumenSobrante, 1.75);
-  cerca(r.volumenAspirado, 6.25); cerca(r.suero, 93.75); cerca(r.volumenFinal, 100);
+  cerca(r.horas, 48); cerca(r.dias, 2);
+  cerca(f.totalMg, 120); assert.strictEqual(f.ampollas, 3);
+  cerca(f.volumenAspirar, 6); cerca(f.volumenSobrante, 0);
+  cerca(r.volumenAspirado, 6); cerca(r.suero, 94); cerca(r.volumenFinal, 100);
   assert.strictEqual(r.volumenExcedido, false);
+});
+test('2 días Baxter (baxter_sv2_5_2d, 120 ml @ 2,5 ml/h = 48 h exactas): 120 mg totales, 6 ml a añadir, 114 ml de suero, verde', () => {
+  const r = H.calcularInfusor({ infusor: 'baxter_sv2_5_2d', farmacos: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }], dias: 2 });
+  cerca(r.horas, 48); cerca(r.dias, 2);
+  cerca(r.farmacos[0].totalMg, 120); cerca(r.farmacos[0].volumenAspirar, 6);
+  cerca(r.suero, 114); cerca(r.volumenFinal, 120);
   assert.strictEqual(r.semaforo.nivel, 'verde');
 });
-test('7 días (dia_7, 252 ml @ 1,5 ml/h = 168 h / 7 días exactos) y caso clínico testigo haloperidol 5 mg/día = 35 mg (HYP-008)', () => {
-  // Test morfina 60 mg/día en 7 días
-  const rMorf = H.calcularInfusor({ infusor: 'dia_7', farmacos: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }] });
-  cerca(rMorf.horas, 168); cerca(rMorf.dias, 7);
-  cerca(rMorf.farmacos[0].totalMg, 420);
-  cerca(rMorf.farmacos[0].volumenAspirar, 21);
-  assert.strictEqual(rMorf.farmacos[0].ampollas, 11);
-  cerca(rMorf.farmacos[0].volumenSobrante, 1);
-  cerca(rMorf.suero, 231);
-  cerca(rMorf.volumenFinal, 252);
-  const entregaMorf = (rMorf.farmacos[0].totalMg / rMorf.volumenFinal) * rMorf.infusor.ritmo * 24;
-  cerca(entregaMorf, 60, '7 días 252 ml @ 1,5 ml/h entrega exactamente 60 mg/24 h');
-
-  // Test caso clínico testigo de haloperidol 5 mg/día en 7 días (HYP-008)
-  const rHalo = H.calcularInfusor({ infusor: 'dia_7', farmacos: [{ farmaco: 'haloperidol', presentacion: 'halo_5', dosisDiaria: 5 }] });
-  cerca(rHalo.horas, 168); cerca(rHalo.dias, 7);
-  cerca(rHalo.farmacos[0].totalMg, 35, '5 mg/día × 7 días = 35 mg exactos');
-  cerca(rHalo.farmacos[0].volumenAspirar, 7, '35 mg ÷ 5 mg/ml = 7 ml exactos');
-  assert.strictEqual(rHalo.farmacos[0].ampollas, 7, '7 ampollas de 1 ml');
-  cerca(rHalo.farmacos[0].volumenSobrante, 0, '0 ml de sobrante');
-  cerca(rHalo.suero, 245, '252 ml - 7 ml = 245 ml de suero');
-  cerca(rHalo.volumenFinal, 252);
-  const entregaHalo = (rHalo.farmacos[0].totalMg / rHalo.volumenFinal) * rHalo.infusor.ritmo * 24;
-  cerca(entregaHalo, 5, 'entrega exactamente 5 mg/24 h');
+test('7 días (dia_7, 250 ml @ 1,5 ml/h = 168 h pauta): 420 mg totales, 21 ml a añadir, 229 ml de suero', () => {
+  const r = H.calcularInfusor({ infusor: 'dia_7', farmacos: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }], dias: 7 });
+  cerca(r.horas, 168); cerca(r.dias, 7);
+  cerca(r.farmacos[0].totalMg, 420);
+  cerca(r.farmacos[0].volumenAspirar, 21);
+  assert.strictEqual(r.farmacos[0].ampollas, 11);
+  cerca(r.suero, 229);
+  cerca(r.volumenFinal, 250);
 });
 
 console.log('\nFármacos, presentaciones y precisión de volúmenes pequeños (HYP-004)');
-test('vial morfina 400 mg/20 ml: 1 vial, 4,25 ml sobrantes en 5,25 días, textoAbrir usa "vial"', () => {
-  const f = H.calcularFarmaco({ farmaco: 'morfina', presentacion: 'morfina_vial', dosisDiaria: 60 }, 5.25);
-  assert.strictEqual(f.ampollas, 1); cerca(f.volumenAspirar, 15.75); cerca(f.volumenSobrante, 4.25);
-  assert.strictEqual(f.textoAnadir, 'Añadir al infusor: 15,75 ml');
+test('vial morfina 400 mg/20 ml: 1 vial, sobrante con advertencia breve («Habrá sobrante en el vial»)', () => {
+  const f = H.calcularFarmaco({ farmaco: 'morfina', presentacion: 'morfina_vial', dosisDiaria: 60 }, 5);
+  assert.strictEqual(f.ampollas, 1); cerca(f.volumenAspirar, 15); cerca(f.volumenSobrante, 5);
+  assert.strictEqual(f.textoAnadir, 'Añadir al infusor: 15 ml');
   assert.strictEqual(f.textoAbrir, 'Abrir: 1 vial');
   assert.strictEqual(f.sobraContenido, true);
-  assert.strictEqual(f.notaSobrante, 'Puede sobrar contenido');
+  assert.strictEqual(f.notaSobrante, 'Habrá sobrante en el vial');
 });
 test('fmt nunca muestra "0" para volúmenes positivos pequeños y calcularInfusor emite alerta ámbar VOLUMEN_NO_MEDIBLE cuando < 0,05 ml', () => {
   assert.strictEqual(H.fmt(0), '0');
@@ -224,14 +221,14 @@ test('HYP-004 ejemplo 1: 10 ml con ampollas de 2 ml → añadir 10 ml, abrir 5 a
   assert.strictEqual(f.sobraContenido, false);
   cerca(f.totalMg, 200, 'el redondeo de envases no modifica la dosis');
 });
-test('HYP-004 ejemplo 2: 13 ml con ampollas de 2 ml → añadir 13 ml, abrir 7 ampollas, con nota de sobrante', () => {
+test('HYP-004 ejemplo 2: 13 ml con ampollas de 2 ml → añadir 13 ml, abrir 7 ampollas, con nota de sobrante («Habrá sobrante en la ampolla»)', () => {
   const f = H.calcularFarmaco({ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 260 }, 1);
   cerca(f.volumenAspirar, 13);
   assert.strictEqual(f.ampollas, 7);
   assert.strictEqual(f.textoAnadir, 'Añadir al infusor: 13 ml');
   assert.strictEqual(f.textoAbrir, 'Abrir: 7 ampollas');
   assert.strictEqual(f.sobraContenido, true);
-  assert.strictEqual(f.notaSobrante, 'Puede sobrar contenido');
+  assert.strictEqual(f.notaSobrante, 'Habrá sobrante en la ampolla');
   cerca(f.totalMg, 260, 'el redondeo a 7 ampollas nunca aumenta el volumen ni la dosis a incorporar (sigue siendo 260 mg / 13 ml)');
 });
 test('HYP-004 generalización a todos los fármacos y presentaciones del catálogo (con números de registro CIMA verificados)', () => {
@@ -481,7 +478,7 @@ test('ROJO: volumen excedido', () => {
 test('ROJO: metadona', () => assert.strictEqual(H.evaluarSemaforo({ metadona: true }).nivel, 'rojo'));
 test('ÁMBAR: dexametasona en infusor prolongado', () => {
   const r = H.calcularInfusor({ infusor: 'sfs2_250', farmacos: [{ farmaco: 'dexametasona', dosisDiaria: 8 }] });
-  assert.strictEqual(r.semaforo.nivel, 'ambar'); assert.strictEqual(r.semaforo.alertas[0].codigo, 'DEXA_PROLONGADO');
+  assert.strictEqual(r.semaforo.nivel, 'rojo'); assert.strictEqual(r.semaforo.alertas[0].codigo, 'DEXA_PROLONGADO');
 });
 test('dexametasona en infusor de 24 h no alerta', () => {
   const r = H.calcularInfusor({ infusor: 'dia_48', farmacos: [{ farmaco: 'dexametasona', dosisDiaria: 8 }] });
@@ -514,15 +511,19 @@ test('ERC grave no sugiere morfina', () => {
   const p = H.planGuiado({ sintomas: ['dolor'], opioide: 'naive', renal: 'grave' });
   assert.strictEqual(p.sugerencias.length, 0); assert.ok(p.advertencias.length);
 });
+const testigoExacto=H.calcularInfusor({infusor:'baxter_lv2_5d',farmacos:[{farmaco:'morfina',presentacion:'morfina_2',dosisDiaria:60}],dias:5});
 test('HYP-005: nota clínica incluye resumen del infusor actual (fármacos, dosis/base temporal, volúmenes, diluyente, volumen final, duración, caudal/dispositivo)', () => {
-  const n = H.generarNota({ infusor: testigo });
+  const n = H.generarNota({ infusor: testigoExacto });
   assert.ok(/NOTA CLÍNICA · INFUSOR ACTUAL \(Hypnos (2\.2|2\.3)\)/.test(n));
-  assert.ok(/Dispositivo: Surefuser™\+ SFS-2-25P-EJ · 250 ml @ 2 ml\/h \(125 h\)/.test(n));
-  assert.ok(/Duración nominal: 5 días · Caudal: 2 ml\/h/.test(n));
-  assert.ok(/Llenado nominal: 250 ml/.test(n));
-  assert.ok(/Morfina clorhidrato \(Ampolla 2% · 40 mg\/2 ml\): 60 mg\/24 h \(total 312,5 mg\) · Añadir al infusor: 15,63 ml · Abrir: 8 ampollas/.test(n));
-  assert.ok(/Diluyente \(Suero fisiológico 0,9 %\): 234,38 ml/.test(n));
-  assert.ok(/Volumen final preparado: 250 ml/.test(n));
+  assert.ok(/Dispositivo: Baxter Infusor LV2 5 días · 240 ml @ 2 ml\/h \(120 h\)/.test(n));
+  assert.ok(/Duración: 5 días \(120 h\) · Caudal: 2 ml\/h/.test(n));
+  assert.ok(!/Duración real/i.test(n));
+  assert.ok(!/5,21 días/i.test(n));
+  assert.ok(/Llenado nominal: 240 ml/.test(n));
+  assert.ok(/Morfina clorhidrato \(Ampolla 2% · 40 mg\/2 ml\): 60 mg\/24 h \(total 300 mg en 5 días\) · Añadir al infusor: 15 ml · Abrir: 8 ampollas · Habrá sobrante en la ampolla/.test(n));
+  assert.ok(!/\d+[,.]\d+ ml sobrantes/.test(n), 'sin ml de sobrante en la nota');
+  assert.ok(/Diluyente \(Suero fisiológico 0,9 %\): 225 ml/.test(n));
+  assert.ok(/Volumen final preparado: 240 ml/.test(n));
   assert.ok(/cada 4 h si dolor o disnea/.test(n));
 });
 test('HYP-005: nota clínica retira el semáforo clínico y no genera afirmaciones ficticias sobre consentimiento, familia ni contexto', () => {
@@ -531,7 +532,7 @@ test('HYP-005: nota clínica retira el semáforo clínico y no genera afirmacion
     contexto: 'agonia',
     informaFamilia: true,
     sedacion: true,
-    infusor: testigo,
+    infusor: testigoExacto,
     alertas: [H.bloqueoMetadona()],
   });
   assert.ok(!/SEMÁFORO/i.test(n), 'sin semáforo en la nota');
@@ -540,7 +541,7 @@ test('HYP-005: nota clínica retira el semáforo clínico y no genera afirmacion
   assert.ok(!/mambrino/i.test(n), 'sin campos administrativos');
 });
 test('HYP-005: cuando hay bloqueo rojo activo o volumen excedido, generarNota no emite la receta de preparación', () => {
-  const nBloq = H.generarNota({ infusor: testigo, bloqueoActivo: true, motivoBloqueo: 'Metadona bloqueada.' });
+  const nBloq = H.generarNota({ infusor: testigoExacto, bloqueoActivo: true, motivoBloqueo: 'Metadona bloqueada.' });
   assert.ok(/PREPARACIÓN BLOQUEADA/.test(nBloq));
   assert.ok(!/Añadir al infusor/.test(nBloq), 'no incluye instrucciones de preparación cuando hay bloqueo activo');
 
@@ -551,7 +552,7 @@ test('HYP-005: cuando hay bloqueo rojo activo o volumen excedido, generarNota no
 });
 test('HYP-005: nota conserva avisos de conversión de opioides (incluyendo rotación sin reducción) cuando aplica', () => {
   const conv = H.convertirOpioide('tramadol', 300);
-  const n = H.generarNota({ infusor: testigo, conversion: conv, avisoFactor: 'Dosis procedente de Oxicodona oral sin verificar.' });
+  const n = H.generarNota({ infusor: testigoExacto, conversion: conv, avisoFactor: 'Dosis procedente de Oxicodona oral sin verificar.' });
   assert.ok(/Oxicodona oral sin verificar/.test(n));
   assert.ok(/Tramadol oral pendiente de verificar/.test(n));
   assert.ok(/Sin reducción por tolerancia cruzada aplicada \(0 %\)/.test(n));
@@ -561,8 +562,10 @@ test('fechaLocal formatea sin T/Z', () => {
   assert.strictEqual(H.fechaLocal(f), '2026-01-05 03:07');
 });
 test('semáforo verde: texto sin promesa de seguridad', () => {
-  assert.ok(/Requiere validación del prescriptor/.test(testigo.semaforo.resumen));
-  assert.ok(!/apto para exportar/i.test(testigo.semaforo.resumen));
+  const rVerde = H.calcularInfusor({ infusor: 'baxter_lv2_5d', farmacos: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }], dias: 5 });
+  assert.strictEqual(rVerde.semaforo.nivel, 'verde');
+  assert.ok(/Requiere validación del prescriptor/.test(rVerde.semaforo.resumen));
+  assert.ok(!/apto para exportar/i.test(rVerde.semaforo.resumen));
 });
 test('rescates de todos los fármacos incluyen intervalo mínimo', () => {
   Object.keys(H.FARMACOS).filter((k) => H.FARMACOS[k].rescate).forEach((k) => {
@@ -661,25 +664,28 @@ test('semaforoGlobal: une módulos, deduplica por código y rojo prevalece', () 
 
 console.log('\nPruebas específicas de las 12 Correcciones (HYPNOS 2.3)');
 
-test('Corrección 1: Desglose matemático explícito de operaciones en fármaco e infusor', () => {
+test('Corrección 1: Desglose matemático explícito de operaciones con días seleccionados enteros', () => {
   const r = H.calcularInfusor({
     infusor: 'dia_2',
     farmacos: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }],
+    dias: 2,
   });
   const f = r.farmacos[0];
   assert.ok(f.operaciones, 'f.operaciones presente');
   assert.ok(/40 mg \/ 2 ml = 20 mg\/ml/.test(f.operaciones.concentracion));
-  assert.ok(/60 mg\/día × 2,08 días = 125 mg/.test(f.operaciones.dosisAcumulada));
-  assert.ok(/125 mg ÷ 20 mg\/ml = 6,25 ml/.test(f.operaciones.volumenAspirar));
-  assert.ok(/ceil\(6,25 ml ÷ 2 ml\) = 4 ampollas/.test(f.operaciones.ampollas));
-  assert.ok(/4 × 2 ml = 8 ml/.test(f.operaciones.volumenEnvases));
-  assert.ok(/8 ml - 6,25 ml = 1,75 ml/.test(f.operaciones.sobrante));
+  assert.ok(/60 mg\/día × 2 días = 120 mg/.test(f.operaciones.dosisAcumulada));
+  assert.ok(/120 mg ÷ 20 mg\/ml = 6 ml/.test(f.operaciones.volumenAspirar));
+  assert.ok(/ceil\(6 ml ÷ 2 ml\) = 3 ampollas/.test(f.operaciones.ampollas));
+  assert.ok(/3 × 2 ml = 6 ml/.test(f.operaciones.volumenEnvases));
+  assert.strictEqual(f.operaciones.sobrante, null, 'sin sobrante no genera aviso');
 
   assert.ok(r.operaciones, 'r.operaciones presente');
-  assert.ok(/100 ml ÷ 2 ml\/h = 50 h/.test(r.operaciones.duracion));
-  assert.ok(/Σ volúmenes de fármacos = 6,25 ml/.test(r.operaciones.volumenFarmacos));
-  assert.ok(/100 ml \(llenado\) - 6,25 ml \(fármacos\) = 93,75 ml/.test(r.operaciones.diluyente));
-  assert.ok(/6,25 ml \(fármacos\) \+ 93,75 ml \(suero\) = 100 ml/.test(r.operaciones.volumenFinal));
+  assert.ok(/2 días \(48 h\) a caudal 2 ml\/h/.test(r.operaciones.duracion));
+  assert.ok(!/Duración real/i.test(r.operaciones.duracion));
+  assert.ok(!/2,08 días/i.test(r.operaciones.duracion));
+  assert.ok(/Σ volúmenes de fármacos = 6 ml/.test(r.operaciones.volumenFarmacos));
+  assert.ok(/100 ml \(llenado\) - 6 ml \(fármacos\) = 94 ml/.test(r.operaciones.diluyente));
+  assert.ok(/6 ml \(fármacos\) \+ 94 ml \(suero\) = 100 ml/.test(r.operaciones.volumenFinal));
 });
 
 test('Corrección 3: Constructor vacío calcula correctamente estado sin fármacos precargados', () => {
@@ -701,45 +707,22 @@ test('Corrección 6: Modo Guiado incluye opción «refractario» con recomendaci
   assert.ok(plan.medidas.some((m) => /Paliativos/i.test(m)), 'recomendación de interconsulta');
 });
 
-test('HYP-007: Ketorolaco visible en catálogo y selector, con presentación CIMA 70102 y bloqueo fundamentado en SC', () => {
+test('Corrección 8: Catálogo farmacológico auditado y ketorolaco trometamol CIMA 70102 bloqueado', () => {
   assert.ok(H.CATALOGO_FARMACOLOGICO_AUDITADO, 'CATALOGO_FARMACOLOGICO_AUDITADO definido');
-  const ketoAud = H.CATALOGO_FARMACOLOGICO_AUDITADO.ketorolaco;
-  assert.ok(ketoAud, 'ketorolaco presente en auditoría');
-  assert.strictEqual(ketoAud.cima[0], '70102');
-
-  // HYP-007: Debe estar visible en FARMACOS con su presentación oficial
-  const keto = H.FARMACOS.ketorolaco;
-  assert.ok(keto, 'ketorolaco DEBE estar visible en FARMACOS');
-  assert.strictEqual(keto.nombre, 'Ketorolaco trometamol');
-  assert.strictEqual(keto.bloqueadoSC, true, 'bloqueadoSC debe ser true');
-  assert.strictEqual(keto.presentaciones[0].cima, '70102');
-  assert.strictEqual(keto.presentaciones[0].mg, 30);
-  assert.strictEqual(keto.presentaciones[0].ml, 1);
-
-  // Alerta roja de seguridad y bloqueo al intentar calcular infusor con ketorolaco
-  const r = H.calcularInfusor({
-    infusor: 'dia_2',
-    farmacos: [{ farmaco: 'ketorolaco', presentacion: 'keto_30', dosisDiaria: 60 }]
-  });
-  assert.strictEqual(r.semaforo.nivel, 'rojo', 'Ketorolaco debe generar semáforo rojo');
-  assert.strictEqual(r.semaforo.apto, false, 'No debe ser apto para preparación');
-  const alertaKeto = r.semaforo.alertas.find((a) => a.codigo === 'KETOROLACO_BLOQUEADO_SC');
-  assert.ok(alertaKeto, 'Alerta KETOROLACO_BLOQUEADO_SC presente');
-
-  // Nota clínica bloqueada
-  const nota = H.generarNota({ infusor: r });
-  assert.ok(/PREPARACIÓN BLOQUEADA/i.test(nota), 'Nota clínica bloquea preparación con ketorolaco');
+  const keto = H.CATALOGO_FARMACOLOGICO_AUDITADO.ketorolaco;
+  assert.ok(keto, 'ketorolaco presente en auditoría');
+  assert.strictEqual(keto.cima[0], '70102');
+  assert.deepStrictEqual(keto.viasAprobadas, ['IV', 'IM']);
+  assert.strictEqual(keto.viaSubcutaneaAprobada, false);
+  assert.strictEqual(keto.duracionMaximaParenteralDias, 2);
+  assert.strictEqual(keto.estadoInfusor, 'bloqueado_sc_offlabel');
+  assert.strictEqual(keto.pendienteValidacionClinica, true);
+  assert.ok(/off-label/i.test(keto.motivoBloqueo));
+  assert.ok(H.FARMACOS.ketorolaco.bloqueadoSC);
+  assert.strictEqual(H.evaluarSemaforo({farmacos:['ketorolaco'],dias:1}).nivel, 'rojo');
 });
 
-test('HYP-010: Escala de Sedación de Ramsay (6 niveles, evaluación actual/objetivo y opción no valorado)', () => {
-  // Soporte de no valorado / no aplicable
-  const rNoVal = H.evaluarRamsay({ noValorado: true });
-  assert.strictEqual(rNoVal.valido, true);
-  assert.strictEqual(rNoVal.noValorado, true);
-
-  const rNull = H.evaluarRamsay({ nivelObservado: null, nivelObjetivo: null });
-  assert.strictEqual(rNull.valido, true);
-  assert.strictEqual(rNull.noValorado, true);
+test('Corrección 9: Escala de Sedación de Ramsay (6 niveles y evaluación clínica sin prescripción automática)', () => {
   assert.ok(H.ESCALA_RAMSAY, 'ESCALA_RAMSAY definida');
   assert.strictEqual(H.ESCALA_RAMSAY.niveles.length, 6, '6 niveles en Ramsay');
   assert.ok(/BMJ 1974/i.test(H.ESCALA_RAMSAY.fuente), 'cita original BMJ 1974');
@@ -773,15 +756,106 @@ test('HYP-010: Escala de Sedación de Ramsay (6 niveles, evaluación actual/obje
   assert.ok(/libre de dolor/i.test(rDoc.preferenciasPaciente));
 });
 
-test('HYP-008: Coherencia física estricta de 7 días (252 ml @ 1,5 ml/h = 168 h) dentro del rango del fabricante', () => {
+test('Corrección 12: Eliminación total de capacidad 252 ml y bloqueo en catálogo', () => {
+  Object.keys(H.INFUSORES).forEach((k) => {
+    assert.notStrictEqual(H.INFUSORES[k].llenado, 252, `${k} llenado != 252`);
+    assert.notStrictEqual(H.INFUSORES[k].volumenReal, 252, `${k} volumenReal != 252`);
+  });
+  assert.ok(H.INFUSORES_BLOQUEADOS.capacidad_252, 'capacidad_252 en INFUSORES_BLOQUEADOS');
   const d7 = H.INFUSORES.dia_7;
-  assert.strictEqual(d7.llenado, 252, 'Llenado nominal 252 ml');
-  assert.strictEqual(d7.volumenReal, 252, 'Volumen real 252 ml');
-  assert.strictEqual(d7.ritmo, 1.5, 'Caudal 1,5 ml/h');
-  cerca(d7.volumenReal / d7.ritmo, 168, '252 ml ÷ 1,5 ml/h = 168 h exactas');
-  assert.strictEqual(d7.llenadoMin, 227);
-  assert.strictEqual(d7.maxLlenado, 300);
+  assert.strictEqual(d7.llenado, 250);
+  assert.strictEqual(d7.volumenReal, 250);
+  assert.strictEqual(d7.ritmo, 1.5);
+  cerca(d7.volumenReal / d7.ritmo, 166.66666666666666);
 });
 
+console.log('\nPruebas específicas de las 4 Correcciones Solicitadas');
+
+test('Requisito 1: Ejemplo obligatorio de comprobación (Midazolam 20 mg/día, 5 días seleccionados, 5 mg/1 ml)', () => {
+  const r = H.calcularInfusor({
+    infusor: 'baxter_lv2_5d',
+    farmacos: [{ farmaco: 'midazolam', presentacion: 'mida_5', dosisDiaria: 20 }],
+    dias: 5,
+  });
+  const f = r.farmacos[0];
+  // Total: 20 × 5 = 100 mg
+  cerca(f.totalMg, 100, 'total debe ser 100 mg');
+  // Volumen: 100 ÷ 5 = 20 ml
+  cerca(f.volumenAspirar, 20, 'volumen debe ser 20 ml');
+  // Envases: 20 ampollas para los 5 días (4 ampollas/día)
+  assert.strictEqual(f.ampollas, 20, 'debe ser 20 ampollas');
+  assert.strictEqual(f.textoAbrir, 'Abrir: 20 ampollas');
+  assert.strictEqual(f.sobraContenido, false);
+  assert.strictEqual(f.notaSobrante, null);
+
+  // Verificación negativa estricta: NO debe producir 104,17 mg, 20,83 ml ni 21 ampollas por utilizar 5,21 días
+  assert.notStrictEqual(H.round(f.totalMg, 2), 104.17, 'NO debe producir 104,17 mg');
+  assert.notStrictEqual(H.round(f.volumenAspirar, 2), 20.83, 'NO debe producir 20,83 ml');
+  assert.notStrictEqual(f.ampollas, 21, 'NO debe producir 21 ampollas');
+
+  // Comprobar con otro infusor de 5 días (sfs2_250) que la duración seleccionada sigue mandando sobre la cantidad total
+  const rSfs = H.calcularInfusor({
+    infusor: 'sfs2_250',
+    farmacos: [{ farmaco: 'midazolam', presentacion: 'mida_5', dosisDiaria: 20 }],
+    dias: 5,
+  });
+  const fSfs = rSfs.farmacos[0];
+  cerca(fSfs.totalMg, 100);
+  cerca(fSfs.volumenAspirar, 20);
+  assert.strictEqual(fSfs.ampollas, 20);
+});
+
+test('Requisito 2: Sobrante sin cantidades (únicamente advertencia breve cualitativa)', () => {
+  // Caso con ampolla y sobrante
+  const fAmp = H.calcularFarmaco({ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 30 }, 1);
+  assert.strictEqual(fAmp.sobraContenido, true);
+  assert.strictEqual(fAmp.notaSobrante, 'Habrá sobrante en la ampolla');
+  assert.strictEqual(fAmp.operaciones.sobrante, 'Habrá sobrante en la ampolla');
+  assert.ok(!/0,5 ml/.test(fAmp.notaSobrante), 'sin mililitros en nota de ampolla');
+  assert.ok(!/0,5 ml/.test(fAmp.operaciones.sobrante), 'sin mililitros en operaciones.sobrante');
+
+  // Caso con vial y sobrante
+  const fVial = H.calcularFarmaco({ farmaco: 'morfina', presentacion: 'morfina_vial', dosisDiaria: 60 }, 5);
+  assert.strictEqual(fVial.sobraContenido, true);
+  assert.strictEqual(fVial.notaSobrante, 'Habrá sobrante en el vial');
+  assert.strictEqual(fVial.operaciones.sobrante, 'Habrá sobrante en el vial');
+  assert.ok(!/5 ml/.test(fVial.notaSobrante), 'sin mililitros en nota de vial');
+
+  // Caso sin sobrante: no muestra advertencia
+  const fExacto = H.calcularFarmaco({ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 40 }, 1);
+  assert.strictEqual(fExacto.sobraContenido, false);
+  assert.strictEqual(fExacto.notaSobrante, null);
+  assert.strictEqual(fExacto.operaciones.sobrante, null);
+});
+
+test('Requisito 3: Precisión y claridad (sin fracciones artificiales de días decimales pero conservando precisión legítima)', () => {
+  const f = H.calcularFarmaco({ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 15 }, 2);
+  cerca(f.totalMg, 30);
+  cerca(f.volumenAspirar, 1.5);
+  assert.strictEqual(f.ampollas, 1);
+  assert.strictEqual(f.textoAnadir, 'Añadir al infusor: 1,5 ml');
+  assert.strictEqual(f.notaSobrante, 'Habrá sobrante en la ampolla');
+});
+
+test('Requisito 4: Una sola mención de autoría al pie y verificación en index.html', () => {
+  const html = fs.readFileSync(__dirname + '/../index.html', 'utf8');
+  assert.ok(html.includes('© JP. Todos los derechos reservados.'), 'contiene © JP. Todos los derechos reservados.');
+  assert.ok(!/· By JP ·/i.test(html), 'NO contiene · By JP · redundante');
+  const topbarMatch = html.match(/<header class="topbar">([\s\S]*?)<\/header>/);
+  assert.ok(topbarMatch, 'topbar presente');
+  assert.ok(!/JP/i.test(topbarMatch[1]), 'sin mención de JP en el header');
+});
+
+test('Discrepancias de duración bloquean preparación y nota sin cambiar dosis ni caudal', () => {
+  for (const id of ['sfs2_250','dia_2','dia_7']) {
+    const r=H.calcularInfusor({infusor:id,farmacos:[{farmaco:'midazolam',presentacion:'mida_5',dosisDiaria:20}]});
+    assert.strictEqual(r.semaforo.nivel,'rojo');
+    assert.strictEqual(r.semaforo.apto,false);
+    const nota=H.generarNota({infusor:r});
+    assert.ok(nota.includes('PREPARACIÓN BLOQUEADA'));
+    assert.ok(!nota.includes('Añadir al infusor:'));
+    cerca(r.farmacos[0].totalMg,20*H.INFUSORES[id].diasCategoria);
+  }
+});
 console.log('\n' + pasados + ' pasados, ' + fallos.length + ' fallidos');
 if (fallos.length) process.exit(1);

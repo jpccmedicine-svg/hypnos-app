@@ -171,7 +171,7 @@ echo [7/8] Comprobando estado de cambios para commit...
 git diff-index --quiet HEAD > nul 2>&1
 if errorlevel 1 (
     echo   Nuevos cambios detectados. Creando commit local...
-    git commit -m "HYPNOS 2.3: Lote HYP-007 a HYP-012 completado (Ketorolaco, 7 dias exactos, texto SECPAL, Ramsay temprana, Copyright y estilo Arena y Zafiro)"
+    git commit -m "HYPNOS 2.3: duracion entera en calculo, midazolam verificado, aviso sobrante sin ml y autoria unica al pie"
     if errorlevel 1 (
         color 0C
         echo [ERROR] No se pudo crear el commit local.

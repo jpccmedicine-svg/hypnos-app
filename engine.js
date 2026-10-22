@@ -19,6 +19,14 @@
     if (!Number.isFinite(n)) return '—';
     if (n === 0) return '0';
     let d = dec;
+    // Preservar decimales legítimos finitos (hasta 4 decimales: p. ej. 1,875 o 0,375 o 6,25) sin redondeo arbitrario
+    const nRound4 = round(n, 4);
+    if (Math.abs(n - nRound4) < 1e-6) {
+      if (!Number.isInteger(round(n, 2))) {
+        if (Number.isInteger(round(n, 3) * 1000)) d = Math.max(d, 3);
+        else if (Number.isInteger(round(n, 4) * 10000)) d = Math.max(d, 4);
+      }
+    }
     let r = round(n, d);
     if (r === 0 && Math.abs(n) > 0) {
       d = Math.min(6, Math.max(dec, Math.ceil(-Math.log10(Math.abs(n))) + 1));
@@ -235,22 +243,22 @@
     },
     dia_7: {
       id: 'dia_7',
-      nombre: 'Baxter Infusor LV1.5 7 días · 252 ml @ 1,5 ml/h (168 h)',
+      nombre: 'Baxter Infusor LV1.5 ~7 días · 250 ml @ 1,5 ml/h (~167 h)',
       fabricante: 'Baxter (Large Volume Infusor LV1.5 · ref. 2C1087KP)',
       referenciaFabricante: '2C1087KP',
       verificadoFabricante: true,
-      llenado: 252,
+      llenado: 250,
       llenadoMin: 227,
       maxLlenado: 300,
-      volumenReal: 252,
+      volumenReal: 250,
       ritmo: 1.5,
       minRitmo: 1.5,
       maxRitmo: 1.5,
       precisionPct: 10,
       diasCategoria: 7,
-      etiquetaCorta: 'Volumen: 252 ml · Caudal: 1,5 ml/h (168 h · 7 días)',
+      etiquetaCorta: 'Volumen: 250 ml · Caudal: 1,5 ml/h (~7 días)',
       fuente:
-        'Baxter Elastomeric Products Healthcare Professional Guide (p. 15, Large Volume Infusor LV1.5, ref. 2C1087KP): capacidad nominal 250 ml con rango admisible documentado por el fabricante de 227–300 ml. El llenado de 252 ml a caudal nominal de 1,5 ml/h entrega exactamente 168 h (7 días completos: 252 ml ÷ 1,5 ml/h = 168 h), manteniendo coherencia física estricta entre volumen, ritmo y duración (HYP-008).',
+        'Baxter Elastomeric Products Professional Guide (p. 15, Large Volume Infusor LV1.5, ref. 2C1087KP): capacidad nominal 250 ml (rango admitido 227–300 ml; esta pauta prepara 250 ml de llenado nominal), caudal nominal 1,5 ml/h, duración calculada 166,7 h (~7 días / 6 días 22 h 40 min; rango admisible 152,7–186,7 h), precisión ±10 %. Se corrigió la designación de 252 ml eliminando la capacidad física ficticia (Corrección 12).',
     },
     custom: {
       id: 'custom',
@@ -280,7 +288,8 @@
       'Perfil heredado sfs2_252 retirado por seguridad: calculaba dosis para 252 ml (126 h) diluyendo hasta 250 ml (125 h). En el catálogo oficial Nipro Surefuser™+ (p. 3), el modelo SFS-2-25P-EJ es de 250 ml @ 2,0 ml/h (125 h, id "sfs2_250").',
     dia_60:
       'Perfil heredado dia_60 (60 ml @ 2,5 ml/h) retirado por no contar con referencia respaldada en los catálogos verificados (B. Braun enumera LT 60-12-S a 5 ml/h y LT 60-30-S a 2 ml/h). Utilice B. Braun Easypump® II LT 60-30-S (ref. 4540010) a 48 ml (dia_48, 24 h) o a 60 ml nominales (easypump_60_30, 30 h).',
-
+    capacidad_252:
+      'Capacidad física de 252 ml eliminada del catálogo: los dispositivos de gran volumen (Baxter LV y Nipro SFS-2) tienen capacidad nominal de 250 ml (o 240 ml). Calcular sobre 252 ml procedía de multiplicar 1,5 ml/h × 168 h, pero un depósito de 250 ml a 1,5 ml/h entrega un tiempo real de 166,67 h (~6 días 22 h 40 min). Use la entrada nominal verificada de 250 ml (dia_7).',
   };
 
   /* Límites operativos para validación de dispositivos y entradas personalizadas */
@@ -691,6 +700,9 @@
     const volumenSobrante = Math.max(0, round(volumenTotalAmpollas - volumenAspirar, 4));
     const sobraContenido = volumenSobrante > 1e-6;
     const tipoEnvase = presentacion.envase || (/vial/i.test(presentacion.label) ? 'vial' : 'ampolla');
+    const notaSobrante = sobraContenido
+      ? (tipoEnvase === 'vial' ? 'Habrá sobrante en el vial' : 'Habrá sobrante en la ampolla')
+      : null;
     const etiquetaEnvases = tipoEnvase === 'vial'
       ? (ampollas === 1 ? '1 vial' : ampollas + ' viales')
       : (ampollas === 1 ? '1 ampolla' : ampollas + ' ampollas');
@@ -718,14 +730,14 @@
       }
     }
 
-    // Desglose matemático explícito de operaciones utilizadas (Corrección 1)
+    // Desglose matemático explícito de operaciones utilizadas con duración seleccionada entera
     const operaciones = {
       concentracion: `${presentacion.mg} mg / ${presentacion.ml} ml = ${fmt(concentracion)} mg/ml`,
-      dosisAcumulada: `${fmt(dosisDiaria)} mg/día × ${fmt(dias)} días = ${fmt(totalMg)} mg`,
+      dosisAcumulada: `${fmt(dosisDiaria)} mg/día × ${fmt(dias)} ${dias === 1 ? 'día' : 'días'} = ${fmt(totalMg)} mg`,
       volumenAspirar: `${fmt(totalMg)} mg ÷ ${fmt(concentracion)} mg/ml = ${fmt(volumenAspirar)} ml`,
       ampollas: `ceil(${fmt(volumenAspirar)} ml ÷ ${presentacion.ml} ml) = ${ampollas} ${tipoEnvase === 'vial' ? (ampollas === 1 ? 'vial' : 'viales') : 'ampollas'}`,
       volumenEnvases: `${ampollas} × ${presentacion.ml} ml = ${fmt(volumenTotalAmpollas)} ml`,
-      sobrante: sobraContenido ? `${fmt(volumenTotalAmpollas)} ml - ${fmt(volumenAspirar)} ml = ${fmt(volumenSobrante)} ml` : '0 ml (sin sobrante)',
+      sobrante: sobraContenido ? notaSobrante : null,
     };
 
     return {
@@ -744,7 +756,7 @@
       textoAnadir: `Añadir al infusor: ${fmt(volumenAspirar)} ml`,
       textoAbrir: `Abrir: ${ampollas} ${tipoEnvase === 'vial' ? (ampollas === 1 ? 'vial' : 'viales') : 'ampollas'}`,
       sobraContenido,
-      notaSobrante: sobraContenido ? 'Puede sobrar contenido' : null,
+      notaSobrante,
       volumenTotalAmpollas,
       volumenSobrante,
       rescate,
@@ -810,18 +822,17 @@
 
     candidatosPorDuracion.forEach((inf) => {
       const horas = inf.volumenReal / inf.ritmo;
-      const diasReales = horas / 24;
       let volRequerido = volumenMinimoExplicito;
       if (farmacosValidos.length > 0) {
         const volFarmacos = farmacosValidos.reduce((s, item) => {
-          const calc = calcularFarmaco(item, diasReales);
+          const calc = calcularFarmaco(item, diasObjetivo);
           return s + calc.volumenAspirar;
         }, 0);
         volRequerido = Math.max(volRequerido, volFarmacos);
       }
       const detalle = Object.assign({}, inf, {
-        horas: round(horas, 2),
-        dias: round(diasReales, 2),
+        horas: round(diasObjetivo * 24, 2),
+        dias: diasObjetivo,
         volumenRequerido: round(volRequerido, 2),
         etiquetaCorta: inf.etiquetaCorta || `Volumen: ${fmt(inf.llenado)} ml · Caudal: ${fmt(inf.ritmo)} ml/h`,
       });
@@ -955,7 +966,8 @@
     if (ctx.renalGrave) {
       alertas.push({ nivel: 'ambar', codigo: 'ERC_GRAVE', mensaje: MENSAJE_ERC });
     }
-    if (ids.indexOf('dexametasona') !== -1 && (ctx.dias > 1.05 || ids.length > 1)) {
+    const diasInfusionFisica = ctx.duracionFisicaDias != null ? ctx.duracionFisicaDias : ctx.dias;
+    if (ids.indexOf('dexametasona') !== -1 && (diasInfusionFisica > 1.05 || ids.length > 1)) {
       alertas.push({
         nivel: 'ambar',
         codigo: 'DEXA_PROLONGADO',
@@ -990,9 +1002,27 @@
     return { nivel, apto: nivel !== 'rojo', resumen, alertas };
   }
 
-  /* ───────────── Cálculo completo de infusor ───────────── */
+  /* ───────────── Cálculo completo de infusor ─────────────
+   * Duración seleccionada entera como base estricta de cálculo.
+   * Cantidad total = dosis diaria prescrita × días seleccionados.
+   * Coherencia obligatoria comprobada conjuntamente: duración, volumen final y caudal. */
   function calcularInfusor(entrada) {
-    const { horas, dias, infusor: inf } = calcularDuracion(entrada.infusor);
+    const duracionInfo = calcularDuracion(entrada.infusor);
+    const inf = duracionInfo.infusor;
+    let dias;
+    if (entrada.dias != null && Number(entrada.dias) > 0) {
+      dias = Math.max(1, Math.round(Number(entrada.dias)));
+    } else if (inf.diasCategoria != null) {
+      dias = inf.diasCategoria;
+    } else if (entrada.infusor && Number(entrada.infusor.dias) > 0) {
+      dias = Math.max(1, Math.round(Number(entrada.infusor.dias)));
+    } else {
+      // Para dispositivos personalizados sin días explícitos, usar días enteros redondeados del vaciado físico
+      dias = Math.max(1, Math.round(duracionInfo.dias));
+    }
+    const horas = dias * 24;
+    const horasDispositivo = duracionInfo.horas;
+
     const todasLasFilas = Array.isArray(entrada.farmacos) ? entrada.farmacos : [];
     let filasIncompletas = 0;
     const filasValidas = [];
@@ -1022,9 +1052,44 @@
                               inf.llenado > (inf.maxLlenado || LIMITES_INFUSOR_FABRICANTE.llenadoMax) + EPS;
     const volumenNoMedible = farmacos.some((f) => f.volumenAspirar > 0 && f.volumenAspirar < 0.05 - EPS);
 
+    // Coherencia obligatoria: duración seleccionada, volumen final y caudal
+    const volumenTeoricoPauta = horas * inf.ritmo;
+    const diffVol = Math.abs(volumenFinal - volumenTeoricoPauta);
+    const tieneDiscrepanciaFisica = diffVol > 0.05 && (diffVol / volumenFinal > 0.005);
+    let alertaCoherencia = null;
+    if (tieneDiscrepanciaFisica && farmacos.length > 0) {
+      const pctEntrega = (volumenTeoricoPauta / volumenFinal) * 100;
+      const horasVaciado = inf.volumenReal / inf.ritmo;
+      let explicacionDecision = '';
+      if (dias === 5) {
+        if (volumenAspirado <= 240) {
+          explicacionDecision = 'Para cumplir simultáneamente 5 días (120 h a 2 ml/h) y entregar el 100 % de la dosis diaria prescrita, seleccione el dispositivo de 240 ml (Baxter Infusor LV2, ref. 2C1008KP).';
+        } else {
+          explicacionDecision = 'Revise si se autoriza ajustar la pauta o seleccionar un dispositivo de mayor capacidad.';
+        }
+      } else if (dias === 2) {
+        if (volumenAspirado <= 120) {
+          explicacionDecision = 'Para cumplir simultáneamente 2 días (48 h a 2,5 ml/h) y entregar el 100 % de la dosis diaria prescrita, seleccione el dispositivo de 120 ml (Baxter Folfusor SV2.5, ref. 2C4711K).';
+        } else {
+          explicacionDecision = 'Revise si se autoriza ajustar la pauta o seleccionar un dispositivo de mayor capacidad.';
+        }
+      } else if (dias === 7) {
+        explicacionDecision = 'Para administrar 7 días enteros (168 h) a 1,5 ml/h se requerirían 252 ml; con llenado nominal de 250 ml el infusor se agotará a las 166,67 h (1 h y 20 min antes de completar los 7 días).';
+      } else {
+        explicacionDecision = 'Revise si se autoriza ajustar el volumen de llenado o seleccionar un dispositivo con capacidad adaptada.';
+      }
+      alertaCoherencia = {
+        nivel: 'rojo',
+        codigo: 'DISPOSITIVO_DESVIACION_DURACION',
+        titulo: 'Discrepancia física entre dispositivo y duración seleccionada',
+        mensaje: `A caudal de ${fmt(inf.ritmo)} ml/h durante ${dias} ${dias === 1 ? 'día' : 'días'} (${horas} h) se requiere infundir ${fmt(volumenTeoricoPauta)} ml, mientras que el volumen preparado es ${fmt(volumenFinal)} ml (tiempo de vaciado ${fmt(horasVaciado)} h). Disolver la dosis de ${dias} días en ${fmt(volumenFinal)} ml entregará el ${fmt(pctEntrega, 1)} % de la dosis diaria prescrita si la infusión dura ${fmt(horasVaciado)} h. ${explicacionDecision}`,
+      };
+    }
+
     const semaforo = evaluarSemaforo({
       farmacos: farmacos.map((f) => f.farmaco),
       dias,
+      duracionFisicaDias: horasDispositivo / 24,
       volumenAspirado,
       llenado: inf.llenado,
       ritmo: inf.ritmo,
@@ -1037,8 +1102,15 @@
       metadona: Boolean(entrada.metadona),
     });
 
+    if (alertaCoherencia) {
+      semaforo.alertas.push(alertaCoherencia);
+      semaforo.nivel = 'rojo';
+      semaforo.apto = false;
+      semaforo.resumen = 'Preparación bloqueada: resuelva la discrepancia entre duración, volumen y caudal';
+    }
+
     const operaciones = {
-      duracion: `${fmt(inf.volumenReal)} ml ÷ ${fmt(inf.ritmo)} ml/h = ${fmt(horas)} h (${fmt(dias)} días)`,
+      duracion: `${fmt(dias)} ${dias === 1 ? 'día' : 'días'} (${horas} h) a caudal ${fmt(inf.ritmo)} ml/h`,
       volumenFarmacos: `Σ volúmenes de fármacos = ${fmt(volumenAspirado)} ml`,
       diluyente: `${fmt(inf.llenado)} ml (llenado) - ${fmt(volumenAspirado)} ml (fármacos) = ${fmt(suero)} ml de Suero Fisiológico 0,9 %`,
       volumenFinal: `${fmt(volumenAspirado)} ml (fármacos) + ${fmt(suero)} ml (suero) = ${fmt(volumenFinal)} ml`,
@@ -1048,6 +1120,8 @@
       infusor: inf,
       horas,
       dias,
+      horasDispositivo,
+      tieneDiscrepanciaFisica,
       farmacos,
       filasIncompletas,
       volumenAspirado,
@@ -1549,16 +1623,23 @@
       L.push('');
       L.push('DISPOSITIVO Y DURACIÓN:');
       L.push('- Dispositivo: ' + r.infusor.nombre);
-      L.push('- Duración nominal: ' + fmt(r.infusor.diasCategoria || Math.round(r.dias)) + ' días · Caudal: ' + fmt(r.infusor.ritmo) + ' ml/h');
+      L.push('- Duración: ' + fmt(r.dias) + (r.dias === 1 ? ' día' : ' días') + ' (' + fmt(r.horas) + ' h) · Caudal: ' + fmt(r.infusor.ritmo) + ' ml/h');
       L.push('- Llenado nominal: ' + fmt(r.infusor.llenado) + ' ml' +
         (r.infusor.volumenReal !== r.infusor.llenado ? ' · Volumen real: ' + fmt(r.infusor.volumenReal) + ' ml' : ''));
+      if (r.tieneDiscrepanciaFisica && r.semaforo && Array.isArray(r.semaforo.alertas)) {
+        const alertaCoh = r.semaforo.alertas.find((a) => a.codigo === 'DISPOSITIVO_DESVIACION_DURACION');
+        if (alertaCoh) {
+          L.push('- AVISO DE COHERENCIA FÍSICA: ' + alertaCoh.mensaje);
+        }
+      }
       L.push('');
       L.push('FÁRMACOS:');
       r.farmacos.forEach((f) => {
         const envTxt = f.tipoEnvase === 'vial' ? (f.ampollas === 1 ? 'vial' : 'viales') : 'ampollas';
+        const avisoSobranteTxt = f.sobraContenido ? ' · ' + f.notaSobrante : '';
         L.push('- ' + f.nombre + ' (' + f.presentacion.label + '): ' +
-          fmt(f.dosisDiaria) + ' mg/24 h (total ' + fmt(f.totalMg) + ' mg) · ' +
-          'Añadir al infusor: ' + fmt(f.volumenAspirar) + ' ml · Abrir: ' + f.ampollas + ' ' + envTxt);
+          fmt(f.dosisDiaria) + ' mg/24 h (total ' + fmt(f.totalMg) + ' mg en ' + fmt(r.dias) + (r.dias === 1 ? ' día' : ' días') + ') · ' +
+          'Añadir al infusor: ' + fmt(f.volumenAspirar) + ' ml · Abrir: ' + f.ampollas + ' ' + envTxt + avisoSobranteTxt);
       });
       L.push('');
       L.push('DILUYENTE Y VOLUMEN FINAL:');

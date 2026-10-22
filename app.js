@@ -18,7 +18,7 @@
   const state = {
     modo: 'sencillo',
     diasSeleccionados: 5, // 1 | 2 | 4 | 5 | 7 | 'custom'
-    infusor: 'sfs2_250',
+    infusor: 'baxter_lv2_5d',
     rows: [], // Corrección 3: Abre vacío por defecto (sin precargar midazolam ni morfina)
     parchesFentanilo: [{ parche: 25, cantidad: 1 }],
     ultimo: null, // último resultado de infusor
@@ -139,7 +139,7 @@
     if (bE) { bE.classList.toggle('active', modo === 'experto'); bE.setAttribute('aria-checked', String(modo === 'experto')); }
     if (modo === 'sencillo' && (state.diasSeleccionados === 'custom' || state.diasSeleccionados === 4)) {
       state.diasSeleccionados = 5;
-      state.infusor = 'sfs2_250';
+      state.infusor = 'baxter_lv2_5d';
     }
     renderRows();
     recalcular();
@@ -369,10 +369,13 @@
       return;
     }
     const inf = d.infusor;
+    const diasEnteros = state.diasSeleccionados === 'custom' ? Math.max(1, Math.round(d.dias)) : Number(state.diasSeleccionados);
+    const diasMostrar = fmt(diasEnteros) + (diasEnteros === 1 ? ' día' : ' días');
+    const horasMostrar = fmt(diasEnteros * 24) + ' h';
     el.innerHTML = `
       <div class="kpi-item">
-        <dt class="kpi-label">Duración nominal</dt>
-        <dd class="kpi-val"><strong>${fmt(inf.diasCategoria || Math.round(d.dias))} días</strong></dd>
+        <dt class="kpi-label">Duración</dt>
+        <dd class="kpi-val"><strong>${diasMostrar} (${horasMostrar})</strong></dd>
       </div>
       <div class="kpi-item">
         <dt class="kpi-label">Volumen llenado</dt>
@@ -412,7 +415,8 @@
       const dur = H.calcularDuracion(infLeido);
       renderInfusorResumen(dur);
 
-      const r = H.calcularInfusor({ infusor: infLeido, farmacos: state.rows });
+      const diasParam = state.diasSeleccionados === 'custom' ? null : Number(state.diasSeleccionados);
+      const r = H.calcularInfusor({ infusor: infLeido, farmacos: state.rows, dias: diasParam });
       state.ultimo = r;
       setAlertas('infusor', r.semaforo.alertas);
 
@@ -445,7 +449,7 @@
         <div class="prep-acciones">
           <span class="prep-dato">Añadir al infusor: <strong>${fmt(f.volumenIncorporar)} ml</strong></span>
           <span class="prep-dato">Abrir: <strong>${f.ampollas} ${f.tipoEnvase === 'vial' ? (f.ampollas === 1 ? 'vial' : 'viales') : 'ampollas'}</strong></span>
-          ${f.sobraContenido ? `<span class="prep-sobrante">Habrá sobrante en ${f.tipoEnvase === 'vial' ? 'el vial' : 'la ampolla'}</span>` : ''}
+          ${f.sobraContenido ? `<span class="prep-sobrante">${esc(f.notaSobrante)}</span>` : ''}
         </div>
       </li>`).join('');
     return `
@@ -464,7 +468,7 @@
           <td>${fmt(f.totalMg)} mg</td>
           <td><strong>${fmt(f.volumenIncorporar)} ml</strong></td>
           <td>${f.ampollas} ${envTxt}</td>
-          <td>${f.sobraContenido ? (f.tipoEnvase === 'vial' ? 'Habrá sobrante en el vial' : 'Habrá sobrante en la ampolla') : 'Sin sobrante'}</td></tr>`;
+          <td>${f.sobraContenido ? esc(f.notaSobrante) : 'Sin sobrante'}</td></tr>`;
     }).join('');
     return `
       <div class="tabla-wrap"><table class="tabla">
@@ -486,11 +490,11 @@
         </div>
         <div class="desglose-grid">
           <div class="d-item"><span class="d-lbl">Concentración:</span> <code class="d-val">${esc(f.operaciones.concentracion)}</code></div>
-          <div class="d-item"><span class="d-lbl">Dosis acumulada:</span> <code class="d-val">${fmt(f.totalMg)} mg totales</code></div>
+          <div class="d-item"><span class="d-lbl">Dosis acumulada (${fmt(r.dias)} d):</span> <code class="d-val">${esc(f.operaciones.dosisAcumulada)}</code></div>
           <div class="d-item"><span class="d-lbl">Volumen a extraer:</span> <code class="d-val">${esc(f.operaciones.volumenAspirar)}</code></div>
           <div class="d-item"><span class="d-lbl">Envases a abrir:</span> <code class="d-val">${esc(f.operaciones.ampollas)}</code></div>
           <div class="d-item"><span class="d-lbl">Volumen en envases:</span> <code class="d-val">${esc(f.operaciones.volumenEnvases)}</code></div>
-          ${f.sobraContenido ? `<div class="d-item"><span class="prep-sobrante">Habrá sobrante en ${f.tipoEnvase === 'vial' ? 'el vial' : 'la ampolla'}.</span></div>` : ''}
+          ${f.sobraContenido ? `<div class="d-item"><span class="prep-sobrante">${esc(f.notaSobrante)}.</span></div>` : ''}
         </div>
       </div>
     `).join('');
@@ -502,7 +506,7 @@
           <span class="desglose-badge">Aritmética verificada</span>
         </summary>
         <div class="desglose-cuerpo">
-          <p class="muted">Operaciones exactas utilizadas para el cálculo de masa acumulada, volumen a aspirar y diluyente para el infusor de ${fmt(r.infusor.diasCategoria || Math.round(r.dias))} días nominales, según su volumen de llenado y caudal de ${fmt(r.infusor.ritmo)} ml/h:</p>
+          <p class="muted">Operaciones exactas utilizadas para el cálculo de masa acumulada, volumen a aspirar y diluyente según los ${fmt(r.dias)} días seleccionados (${fmt(r.horas)} h a ${fmt(r.infusor.ritmo)} ml/h):</p>
           <div class="desglose-farmacos-lista">${farmacosOps}</div>
           <div class="desglose-dispositivo-box">
             <h5>Balance volumétrico del infusor</h5>
@@ -510,7 +514,7 @@
               <div class="d-item"><span class="d-lbl">Volumen total de fármacos:</span> <code class="d-val">${esc(r.operaciones.volumenFarmacos)}</code></div>
               <div class="d-item"><span class="d-lbl">Diluyente (Suero Fisiológico 0,9 %):</span> <code class="d-val">${esc(r.operaciones.diluyente)}</code></div>
               <div class="d-item"><span class="d-lbl">Volumen final preparado:</span> <code class="d-val">${esc(r.operaciones.volumenFinal)}</code></div>
-              <div class="d-item"><span class="d-lbl">Duración y ritmo:</span> <code class="d-val">${fmt(r.infusor.diasCategoria || Math.round(r.dias))} días nominales · ${fmt(r.infusor.ritmo)} ml/h</code></div>
+              <div class="d-item"><span class="d-lbl">Duración y ritmo:</span> <code class="d-val">${fmt(r.dias)} días seleccionados (${fmt(r.horas)} h) · ${fmt(r.infusor.ritmo)} ml/h</code></div>
             </div>
           </div>
         </div>
@@ -518,6 +522,11 @@
   }
 
   function renderResultado(r) {
+    if (r.tieneDiscrepanciaFisica) {
+      return '<div class="card estado rojo" role="alert"><h3>Preparación bloqueada</h3>' +
+        r.semaforo.alertas.map((a) => '<p>' + esc(a.mensaje) + '</p>').join('') +
+        '<p>Seleccione un dispositivo que cumpla la duración, el volumen y el caudal antes de preparar.</p></div>';
+    }
     const pct = Math.min(100, (r.volumenAspirado / r.infusor.llenado) * 100);
     const cuerpoPrep = state.modo === 'sencillo' ? renderPreparacionSencilla(r) : renderPreparacionExperta(r);
     const desgloseMat = renderDesgloseMatematico(r);
@@ -898,7 +907,7 @@
     };
     Object.keys(state.alertas).forEach((k) => { state.alertas[k] = []; });
     state.diasSeleccionados = 5;
-    state.infusor = 'sfs2_250';
+    state.infusor = 'baxter_lv2_5d';
     if ($('#c-llenado')) $('#c-llenado').value = '100';
     if ($('#c-real')) $('#c-real').value = '100';
     if ($('#c-ritmo')) $('#c-ritmo').value = '2';
@@ -1254,7 +1263,7 @@
     if (estadoEl) {
       if (hayBloqueoRojo) estadoEl.textContent = '⛔ Bloqueada por alertas de seguridad';
       else if (!infusorValido) estadoEl.textContent = 'Pendiente de prescripción';
-      else estadoEl.textContent = `${infusorValido.farmacos.length} ${infusorValido.farmacos.length === 1 ? 'fármaco' : 'fármacos'} · ${fmt(infusorValido.infusor.diasCategoria || Math.round(infusorValido.dias))} días`;
+      else estadoEl.textContent = `${infusorValido.farmacos.length} ${infusorValido.farmacos.length === 1 ? 'fármaco' : 'fármacos'} · ${fmt(infusorValido.dias)} días`;
     }
   }
 

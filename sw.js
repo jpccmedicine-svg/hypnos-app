@@ -1,6 +1,6 @@
 /* HYPNOS 2.3 — Service Worker: caché del app shell (Local-First, 100 % offline). */
 const CACHE_PREFIX = 'hypnos-';
-const CACHE = CACHE_PREFIX + 'v2.3-arena-zafiro-cache-r2';
+const CACHE = CACHE_PREFIX + 'v2.3.2-cache';
 const SHELL = [
   './',
   './index.html',
