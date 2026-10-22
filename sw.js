@@ -1,7 +1,21 @@
 /* HYPNOS 2.3 — Service Worker: caché del app shell (Local-First, 100 % offline). */
 const CACHE_PREFIX = 'hypnos-';
-const CACHE = CACHE_PREFIX + 'v2.3-cache';
-const SHELL = ['./', './index.html', './style.css', './engine.js', './app.js', './manifest.json', './icon.svg'];
+const CACHE = CACHE_PREFIX + 'v2.3-arena-zafiro-cache';
+const SHELL = [
+  './',
+  './index.html',
+  './style.css',
+  './engine.js',
+  './app.js',
+  './manifest.json',
+  './icon.svg',
+  './logo.svg',
+  './fonts/inter-tight-latin-400-normal.woff2',
+  './fonts/inter-tight-latin-500-normal.woff2',
+  './fonts/inter-tight-latin-600-normal.woff2',
+  './fonts/inter-tight-latin-700-normal.woff2',
+  './fonts/OFL.txt'
+];
 const SHELL_PATHS = SHELL.map((p) => new URL(p, self.location).pathname);
 
 self.addEventListener('install', (e) => {

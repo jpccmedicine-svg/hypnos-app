@@ -70,7 +70,7 @@ if errorlevel 1 (
 git diff --check > nul 2>&1
 if errorlevel 1 (
     color 0C
-    echo [ERROR CRÍTICO] Se detectaron marcas de conflicto sin resolver en el código.
+    echo [ERROR] Se detectaron espacios al final de linea o marcas de conflicto.
     echo Resuelva los conflictos antes de intentar publicar.
     echo %date% %time% - ERROR: Marcas de conflicto detectadas por git diff --check. >> "%LOGFILE%"
     pause
@@ -98,7 +98,7 @@ if not errorlevel 1 (
 ) else (
     where wsl >nul 2>&1
     if not errorlevel 1 (
-        echo   (Ejecutando pruebas mediante entorno WSL...)
+        echo   Ejecutando pruebas mediante entorno WSL...
         wsl -e node tests/test_engine.js
         if not errorlevel 1 set "TEST_OK=1"
     )
@@ -119,7 +119,7 @@ echo   ✓ Pruebas automatizadas superadas con éxito (100 %% de casos aprobados
 echo.
 echo [5/8] Preparando exclusivamente archivos autorizados de HYPNOS...
 git reset HEAD > nul 2>&1
-git add app.js engine.js index.html hypnos.html manifest.json style.css sw.js icon.svg "tests\test_engine.js" "Actualizar HYPNOS.cmd" actualizar_github.bat
+git add app.js engine.js index.html hypnos.html manifest.json style.css sw.js icon.svg logo.svg fonts "tests\test_engine.js" "Actualizar HYPNOS.cmd" actualizar_github.bat
 if errorlevel 1 (
     color 0C
     echo [ERROR] Falló la preparación de archivos con git add.
@@ -171,7 +171,7 @@ echo [7/8] Comprobando estado de cambios para commit...
 git diff-index --quiet HEAD > nul 2>&1
 if errorlevel 1 (
     echo   Nuevos cambios detectados. Creando commit local...
-    git commit -m "HYPNOS 2.3: 12 correcciones obligatorias, escala Ramsay, catálogo auditado y desglose matemático"
+    git commit -m "HYPNOS 2.3: Lote HYP-007 a HYP-012 completado (Ketorolaco, 7 dias exactos, texto SECPAL, Ramsay temprana, Copyright y estilo Arena y Zafiro)"
     if errorlevel 1 (
         color 0C
         echo [ERROR] No se pudo crear el commit local.

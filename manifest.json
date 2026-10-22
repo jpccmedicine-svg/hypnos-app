@@ -1,14 +1,14 @@
 {
   "name": "Hypnos 2.3 · Asistente clínico de Paliativos",
-  "short_name": "Hypnos 2.3",
+  "short_name": "Hypnos",
   "description": "Asistente clínico Local-First para Cuidados Paliativos y Atención al Final de la Vida.",
   "lang": "es",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#0f172a",
-  "theme_color": "#0f172a",
+  "background_color": "#F8F5EE",
+  "theme_color": "#0F2D57",
   "categories": ["medical", "health", "productivity"],
   "icons": [
     { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },

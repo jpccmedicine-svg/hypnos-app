@@ -1,1 +1,30 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" fill="#0f172a"/><circle cx="256" cy="256" r="150" fill="none" stroke="#0d9488" stroke-width="22"/><path d="M300 130a130 130 0 1 0 60 200 100 100 0 0 1-60-200z" fill="#5eead4"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#F8F5EE"/>
+  <rect x="12" y="12" width="488" height="488" rx="100" fill="none" stroke="#E9DDC8" stroke-width="8"/>
+  <g transform="translate(68, 52) scale(6.2)">
+    <!-- Capitel pilar izquierdo -->
+    <rect x="6" y="6" width="22" height="4.5" rx="1" fill="#0F2D57"/>
+    <rect x="9" y="10.5" width="16" height="2" fill="#0F2D57"/>
+    <!-- Fuste pilar izquierdo -->
+    <rect x="12" y="12" width="10" height="36" fill="#0F2D57"/>
+    <!-- Base pilar izquierdo -->
+    <rect x="9" y="47.5" width="16" height="2" fill="#0F2D57"/>
+    <rect x="6" y="49.5" width="22" height="4.5" rx="1" fill="#0F2D57"/>
+
+    <!-- Capitel pilar derecho -->
+    <rect x="36" y="6" width="22" height="4.5" rx="1" fill="#0F2D57"/>
+    <rect x="39" y="10.5" width="16" height="2" fill="#0F2D57"/>
+    <!-- Fuste pilar derecho -->
+    <rect x="42" y="12" width="10" height="36" fill="#0F2D57"/>
+    <!-- Base pilar derecho -->
+    <rect x="39" y="47.5" width="16" height="2" fill="#0F2D57"/>
+    <rect x="36" y="49.5" width="22" height="4.5" rx="1" fill="#0F2D57"/>
+
+    <!-- Cinta / lazo curvo dorado entrelazado -->
+    <path d="M 32 30 C 37 28 42 27 48 30 C 53 33 55 38 52 44 C 49 48 43 49 39 46"
+          stroke="#C9A962" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <rect x="42" y="18" width="10" height="26" fill="#0F2D57"/>
+    <path d="M 10 44 C 7 38 9 32 14 27 C 19 23 25 24 33 30 C 38 34 43 36 49 34"
+          stroke="#C9A962" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+</svg>

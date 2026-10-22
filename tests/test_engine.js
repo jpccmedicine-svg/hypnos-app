@@ -57,14 +57,14 @@ test('Infusores 2 días: B. Braun Easypump II LT 100-50-S ref. 4540016 (100 ml @
   assert.strictEqual(b2.infusor.referenciaFabricante, '2C4711K');
   assert.strictEqual(b2.infusor.llenado, 120);
 });
-test('Infusor 7 días Baxter Seven Day LV1.5 ref. 2C1087KP: 250 ml @ 1,5 ml/h → 166,67 h (~7 días) con coherencia llenado === volumenReal === 250 ml (Corrección 12)', () => {
+test('Infusor 7 días Baxter Seven Day LV1.5 ref. 2C1087KP: 252 ml @ 1,5 ml/h → 168 h (7 días exactos) dentro del rango 227–300 ml (HYP-008)', () => {
   const d = H.calcularDuracion('dia_7');
-  cerca(d.horas, 166.66666666666666); cerca(d.dias, 166.66666666666666 / 24);
+  cerca(d.horas, 168); cerca(d.dias, 7);
   assert.strictEqual(d.infusor.referenciaFabricante, '2C1087KP');
-  assert.strictEqual(d.infusor.llenado, 250);
+  assert.strictEqual(d.infusor.llenado, 252);
   assert.strictEqual(d.infusor.llenadoMin, 227);
   assert.strictEqual(d.infusor.maxLlenado, 300);
-  assert.strictEqual(d.infusor.volumenReal, 250);
+  assert.strictEqual(d.infusor.volumenReal, 252);
 });
 test('Modelos heredados de v2.1 con catalogación errónea o incoherente están explícitamente bloqueados (baxter_2c1009k LV5, sfs2_252, dia_60)', () => {
   assert.ok(H.INFUSORES_BLOQUEADOS.baxter_2c1009k, 'baxter_2c1009k registrado en INFUSORES_BLOQUEADOS');
@@ -156,15 +156,30 @@ test('2 días (dia_2, 100 ml @ 2 ml/h = 50 h): 125 mg totales, 4 ampollas, 6,25 
   assert.strictEqual(r.volumenExcedido, false);
   assert.strictEqual(r.semaforo.nivel, 'verde');
 });
-test('7 días (dia_7, 250 ml @ 1,5 ml/h = 166,67 h / ~7 días): 416,67 mg totales, 20,83 ml a añadir, 229,17 ml de suero, volumenFinal = 250 ml (Corrección 12)', () => {
-  const r = H.calcularInfusor({ infusor: 'dia_7', farmacos: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }] });
-  cerca(r.horas, 166.66666666666666); cerca(r.dias, 166.66666666666666 / 24);
-  cerca(r.farmacos[0].totalMg, 60 * (166.66666666666666 / 24));
-  cerca(r.farmacos[0].volumenAspirar, (60 * (166.66666666666666 / 24)) / 20);
-  cerca(r.suero, 250 - r.farmacos[0].volumenAspirar);
-  cerca(r.volumenFinal, 250);
-  const entregaDiaria = (r.farmacos[0].totalMg / r.volumenFinal) * r.infusor.ritmo * 24;
-  cerca(entregaDiaria, 60, '7 días 250 ml @ 1,5 ml/h entrega exactamente 60 mg/24 h sin error de dilución');
+test('7 días (dia_7, 252 ml @ 1,5 ml/h = 168 h / 7 días exactos) y caso clínico testigo haloperidol 5 mg/día = 35 mg (HYP-008)', () => {
+  // Test morfina 60 mg/día en 7 días
+  const rMorf = H.calcularInfusor({ infusor: 'dia_7', farmacos: [{ farmaco: 'morfina', presentacion: 'morfina_2', dosisDiaria: 60 }] });
+  cerca(rMorf.horas, 168); cerca(rMorf.dias, 7);
+  cerca(rMorf.farmacos[0].totalMg, 420);
+  cerca(rMorf.farmacos[0].volumenAspirar, 21);
+  assert.strictEqual(rMorf.farmacos[0].ampollas, 11);
+  cerca(rMorf.farmacos[0].volumenSobrante, 1);
+  cerca(rMorf.suero, 231);
+  cerca(rMorf.volumenFinal, 252);
+  const entregaMorf = (rMorf.farmacos[0].totalMg / rMorf.volumenFinal) * rMorf.infusor.ritmo * 24;
+  cerca(entregaMorf, 60, '7 días 252 ml @ 1,5 ml/h entrega exactamente 60 mg/24 h');
+
+  // Test caso clínico testigo de haloperidol 5 mg/día en 7 días (HYP-008)
+  const rHalo = H.calcularInfusor({ infusor: 'dia_7', farmacos: [{ farmaco: 'haloperidol', presentacion: 'halo_5', dosisDiaria: 5 }] });
+  cerca(rHalo.horas, 168); cerca(rHalo.dias, 7);
+  cerca(rHalo.farmacos[0].totalMg, 35, '5 mg/día × 7 días = 35 mg exactos');
+  cerca(rHalo.farmacos[0].volumenAspirar, 7, '35 mg ÷ 5 mg/ml = 7 ml exactos');
+  assert.strictEqual(rHalo.farmacos[0].ampollas, 7, '7 ampollas de 1 ml');
+  cerca(rHalo.farmacos[0].volumenSobrante, 0, '0 ml de sobrante');
+  cerca(rHalo.suero, 245, '252 ml - 7 ml = 245 ml de suero');
+  cerca(rHalo.volumenFinal, 252);
+  const entregaHalo = (rHalo.farmacos[0].totalMg / rHalo.volumenFinal) * rHalo.infusor.ritmo * 24;
+  cerca(entregaHalo, 5, 'entrega exactamente 5 mg/24 h');
 });
 
 console.log('\nFármacos, presentaciones y precisión de volúmenes pequeños (HYP-004)');
@@ -686,21 +701,45 @@ test('Corrección 6: Modo Guiado incluye opción «refractario» con recomendaci
   assert.ok(plan.medidas.some((m) => /Paliativos/i.test(m)), 'recomendación de interconsulta');
 });
 
-test('Corrección 8: Catálogo farmacológico auditado y ketorolaco trometamol CIMA 70102 bloqueado', () => {
+test('HYP-007: Ketorolaco visible en catálogo y selector, con presentación CIMA 70102 y bloqueo fundamentado en SC', () => {
   assert.ok(H.CATALOGO_FARMACOLOGICO_AUDITADO, 'CATALOGO_FARMACOLOGICO_AUDITADO definido');
-  const keto = H.CATALOGO_FARMACOLOGICO_AUDITADO.ketorolaco;
-  assert.ok(keto, 'ketorolaco presente en auditoría');
-  assert.strictEqual(keto.cima[0], '70102');
-  assert.deepStrictEqual(keto.viasAprobadas, ['IV', 'IM']);
-  assert.strictEqual(keto.viaSubcutaneaAprobada, false);
-  assert.strictEqual(keto.duracionMaximaParenteralDias, 2);
-  assert.strictEqual(keto.estadoInfusor, 'bloqueado_sc_offlabel');
-  assert.strictEqual(keto.pendienteValidacionClinica, true);
-  assert.ok(/off-label/i.test(keto.motivoBloqueo));
-  assert.strictEqual(H.FARMACOS.ketorolaco, undefined, 'ketorolaco NO debe estar en FARMACOS activos');
+  const ketoAud = H.CATALOGO_FARMACOLOGICO_AUDITADO.ketorolaco;
+  assert.ok(ketoAud, 'ketorolaco presente en auditoría');
+  assert.strictEqual(ketoAud.cima[0], '70102');
+
+  // HYP-007: Debe estar visible en FARMACOS con su presentación oficial
+  const keto = H.FARMACOS.ketorolaco;
+  assert.ok(keto, 'ketorolaco DEBE estar visible en FARMACOS');
+  assert.strictEqual(keto.nombre, 'Ketorolaco trometamol');
+  assert.strictEqual(keto.bloqueadoSC, true, 'bloqueadoSC debe ser true');
+  assert.strictEqual(keto.presentaciones[0].cima, '70102');
+  assert.strictEqual(keto.presentaciones[0].mg, 30);
+  assert.strictEqual(keto.presentaciones[0].ml, 1);
+
+  // Alerta roja de seguridad y bloqueo al intentar calcular infusor con ketorolaco
+  const r = H.calcularInfusor({
+    infusor: 'dia_2',
+    farmacos: [{ farmaco: 'ketorolaco', presentacion: 'keto_30', dosisDiaria: 60 }]
+  });
+  assert.strictEqual(r.semaforo.nivel, 'rojo', 'Ketorolaco debe generar semáforo rojo');
+  assert.strictEqual(r.semaforo.apto, false, 'No debe ser apto para preparación');
+  const alertaKeto = r.semaforo.alertas.find((a) => a.codigo === 'KETOROLACO_BLOQUEADO_SC');
+  assert.ok(alertaKeto, 'Alerta KETOROLACO_BLOQUEADO_SC presente');
+
+  // Nota clínica bloqueada
+  const nota = H.generarNota({ infusor: r });
+  assert.ok(/PREPARACIÓN BLOQUEADA/i.test(nota), 'Nota clínica bloquea preparación con ketorolaco');
 });
 
-test('Corrección 9: Escala de Sedación de Ramsay (6 niveles y evaluación clínica sin prescripción automática)', () => {
+test('HYP-010: Escala de Sedación de Ramsay (6 niveles, evaluación actual/objetivo y opción no valorado)', () => {
+  // Soporte de no valorado / no aplicable
+  const rNoVal = H.evaluarRamsay({ noValorado: true });
+  assert.strictEqual(rNoVal.valido, true);
+  assert.strictEqual(rNoVal.noValorado, true);
+
+  const rNull = H.evaluarRamsay({ nivelObservado: null, nivelObjetivo: null });
+  assert.strictEqual(rNull.valido, true);
+  assert.strictEqual(rNull.noValorado, true);
   assert.ok(H.ESCALA_RAMSAY, 'ESCALA_RAMSAY definida');
   assert.strictEqual(H.ESCALA_RAMSAY.niveles.length, 6, '6 niveles en Ramsay');
   assert.ok(/BMJ 1974/i.test(H.ESCALA_RAMSAY.fuente), 'cita original BMJ 1974');
@@ -734,17 +773,14 @@ test('Corrección 9: Escala de Sedación de Ramsay (6 niveles y evaluación clí
   assert.ok(/libre de dolor/i.test(rDoc.preferenciasPaciente));
 });
 
-test('Corrección 12: Eliminación total de capacidad 252 ml y bloqueo en catálogo', () => {
-  Object.keys(H.INFUSORES).forEach((k) => {
-    assert.notStrictEqual(H.INFUSORES[k].llenado, 252, `${k} llenado != 252`);
-    assert.notStrictEqual(H.INFUSORES[k].volumenReal, 252, `${k} volumenReal != 252`);
-  });
-  assert.ok(H.INFUSORES_BLOQUEADOS.capacidad_252, 'capacidad_252 en INFUSORES_BLOQUEADOS');
+test('HYP-008: Coherencia física estricta de 7 días (252 ml @ 1,5 ml/h = 168 h) dentro del rango del fabricante', () => {
   const d7 = H.INFUSORES.dia_7;
-  assert.strictEqual(d7.llenado, 250);
-  assert.strictEqual(d7.volumenReal, 250);
-  assert.strictEqual(d7.ritmo, 1.5);
-  cerca(d7.volumenReal / d7.ritmo, 166.66666666666666);
+  assert.strictEqual(d7.llenado, 252, 'Llenado nominal 252 ml');
+  assert.strictEqual(d7.volumenReal, 252, 'Volumen real 252 ml');
+  assert.strictEqual(d7.ritmo, 1.5, 'Caudal 1,5 ml/h');
+  cerca(d7.volumenReal / d7.ritmo, 168, '252 ml ÷ 1,5 ml/h = 168 h exactas');
+  assert.strictEqual(d7.llenadoMin, 227);
+  assert.strictEqual(d7.maxLlenado, 300);
 });
 
 console.log('\n' + pasados + ' pasados, ' + fallos.length + ' fallidos');

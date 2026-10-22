@@ -28,6 +28,7 @@
     ramsay: {
       nivelObservado: null,
       nivelObjetivo: null,
+      noValorado: false,
       preferencias: '',
       voluntadesAnticipadas: false,
       representanteLegal: false,
@@ -225,7 +226,11 @@
 
   /* ───────────── Tab 1 · Infusor ───────────── */
   function opcionesFarmaco(sel) {
-    return Object.keys(H.FARMACOS).map((k) => `<option value="${k}"${k === sel ? ' selected' : ''}>${esc(H.FARMACOS[k].nombre)}</option>`).join('');
+    return Object.keys(H.FARMACOS).map((k) => {
+      const f = H.FARMACOS[k];
+      const sufijo = f.bloqueadoSC ? ' (Bloqueado SC · Ficha CIMA)' : '';
+      return `<option value="${k}"${k === sel ? ' selected' : ''}>${esc(f.nombre)}${sufijo}</option>`;
+    }).join('');
   }
   function opcionesPres(farmaco, sel) {
     return H.FARMACOS[farmaco].presentaciones.map((p) => `<option value="${p.id}"${p.id === sel ? ' selected' : ''}>${esc(p.label)}</option>`).join('');
@@ -244,13 +249,23 @@
       return;
     }
 
-    cont.innerHTML = state.rows.map((r, i) => `
+    cont.innerHTML = state.rows.map((r, i) => {
+      const farmacoObj = H.FARMACOS[r.farmaco];
+      const avisoBloqueo = farmacoObj && farmacoObj.bloqueadoSC
+        ? `<div class="alerta-bloqueo-farmaco alert rojo" role="alert">
+            <strong>⛔ Incorporado al catálogo · Bloqueado para preparación en infusor SC continuo:</strong>
+            <p><small>${esc(farmacoObj.motivoBloqueoSC)}</small></p>
+           </div>`
+        : '';
+      return `
       <div class="fila" data-i="${i}">
         <div><label>Fármaco</label><select data-f="farmaco">${opcionesFarmaco(r.farmaco)}</select></div>
         <div class="fila-pres"><label>Presentación</label><select data-f="presentacion">${opcionesPres(r.farmaco, r.presentacion)}</select></div>
         <div><label>Dosis diaria (mg/día)</label><input data-f="dosisDiaria" type="number" inputmode="decimal" min="0" step="any" placeholder="Dosis mg/24 h" value="${esc(r.dosisDiaria != null ? r.dosisDiaria : '')}"></div>
-        <button class="btn danger icon" type="button" data-act="del" aria-label="Quitar ${esc(H.FARMACOS[r.farmaco].nombre)}">✕</button>
-      </div>`).join('');
+        <button class="btn danger icon" type="button" data-act="del" aria-label="Quitar ${esc(farmacoObj ? farmacoObj.nombre : r.farmaco)}">✕</button>
+      </div>
+      ${avisoBloqueo}`;
+    }).join('');
   }
 
   function syncDurBtnsUI() {
@@ -600,8 +615,8 @@
     recalcular();
   }
 
-  /* ───────────── Tab 2 · Modo Guiado (Corrección 2, 6 y 9) ───────────── */
-  const g = { paso: 0, resp: {} };
+  /* ───────────── Tab 2 · Modo Guiado (HYP-009 y HYP-010) ───────────── */
+  const g = { paso: 0, resp: {}, ramsayCompletada: false };
   function sincronizarAlertasGuiado() {
     const tieneRespuestas = Object.keys(g.resp).some((k) => k !== 'midazolamDisnea');
     if (!tieneRespuestas) {
@@ -612,10 +627,27 @@
     setAlertas('guiado', parcial.semaforo.alertas);
   }
 
+  function esRutaSedacion() {
+    return Boolean(
+      (g.resp.sintomas && g.resp.sintomas.indexOf('sedacion') !== -1) ||
+      g.resp.contexto === 'refractario'
+    );
+  }
+
   function renderGuiado() {
     const cont = $('#guiado');
     const total = H.GUIA_PASOS.length;
-    if (g.paso >= total) return renderPlan(cont);
+
+    // Si ha completado los 5 pasos:
+    if (g.paso >= total) {
+      // HYP-010: Si es ruta de sedación y no se ha completado la pantalla temprana de Ramsay,
+      // mostrar la valoración de Ramsay ANTES de las propuestas de tratamiento.
+      if (esRutaSedacion() && !g.ramsayCompletada) {
+        return renderRamsayPaso(cont);
+      }
+      return renderPlan(cont);
+    }
+
     g.plan = null;
     sincronizarAlertasGuiado();
     const p = H.GUIA_PASOS[g.paso];
@@ -632,58 +664,87 @@
       <div class="btn-row">${g.paso > 0 ? '<button class="btn ghost" type="button" data-act="atras">← Atrás</button>' : ''}<button class="btn ghost" type="button" data-act="reiniciar">Reiniciar</button></div></div>`;
   }
 
-  /* Corrección 9: Renderizado integrado de la Escala de Ramsay */
-  function renderRamsayComponente() {
+  /* HYP-010: Pantalla integrada y temprana de valoración de sedación (Ramsay) */
+  function renderRamsayPaso(cont) {
     const r = state.ramsay;
-    const evaluacion = H.evaluarRamsay({
-      nivelObservado: r.nivelObservado,
-      nivelObjetivo: r.nivelObjetivo,
-      preferenciasPaciente: r.preferencias,
-      voluntadesAnticipadas: r.voluntadesAnticipadas,
-      representanteLegal: r.representanteLegal,
-      consentimientoDocumentado: r.consentimientoDocumentado,
-      reevaluacionConfort: r.reevaluacionConfort,
-    });
+    const niveles = H.ESCALA_RAMSAY.niveles;
 
-    const tarjetasNiveles = H.ESCALA_RAMSAY.niveles.map((n) => {
-      const esObs = r.nivelObservado === n.nivel;
-      const esObj = r.nivelObjetivo === n.nivel;
-      return `
-        <div class="ramsay-card ${esObs ? 'activo-obs' : ''} ${esObj ? 'activo-obj' : ''}">
-          <div class="ramsay-card-top">
-            <span class="ramsay-num">${n.nivel}</span>
-            <span class="ramsay-pill ${n.categoria}">${n.nivel <= 2 ? 'Vigilia' : (n.nivel <= 4 ? 'Sedación leve/moderada' : 'Sedación profunda')}</span>
-          </div>
-          <strong class="ramsay-card-title">${esc(n.titulo)}</strong>
-          <p class="ramsay-card-desc">${esc(n.descripcion)}</p>
-          <p class="ramsay-card-estado"><small>${esc(n.estadoClinico)}</small></p>
-          <div class="ramsay-card-btns">
-            <button type="button" class="btn btn-sm ${esObs ? 'primary' : 'ghost'}" data-act="set-ramsay-obs" data-nivel="${n.nivel}">
-              ${esObs ? '✓ Observado' : 'Registrar observado'}
-            </button>
-            <button type="button" class="btn btn-sm ${esObj ? 'secondary' : 'ghost'}" data-act="set-ramsay-obj" data-nivel="${n.nivel}">
-              ${esObj ? '★ Objetivo' : 'Fijar objetivo'}
-            </button>
-          </div>
-        </div>`;
-    }).join('');
+    // Selector segmentado nivel actual (1 a 6 + no valorado)
+    const btnsActual = niveles.map((n) => {
+      const sel = !r.noValorado && r.nivelObservado === n.nivel;
+      return `<button type="button" class="ramsay-seg-btn ${sel ? 'active' : ''}" data-act="set-ramsay-obs" data-nivel="${n.nivel}">${n.nivel}</button>`;
+    }).join('') + `<button type="button" class="ramsay-seg-btn ramsay-seg-special ${r.noValorado ? 'active' : ''}" data-act="set-ramsay-obs-noval">No valorado</button>`;
 
-    return `
-      <div class="card ramsay-bloque">
-        <div class="card-head">
-          <h4>Escala de Sedación de Ramsay (6 niveles)</h4>
-          <span class="badge info">Monitorización clínica</span>
+    // Selector segmentado objetivo (1 a 6 + no aplica)
+    const btnsObjetivo = niveles.map((n) => {
+      const sel = r.nivelObjetivo === n.nivel;
+      return `<button type="button" class="ramsay-seg-btn ${sel ? 'active' : ''}" data-act="set-ramsay-obj" data-nivel="${n.nivel}">${n.nivel}</button>`;
+    }).join('') + `<button type="button" class="ramsay-seg-btn ramsay-seg-special ${r.nivelObjetivo === null ? 'active' : ''}" data-act="set-ramsay-obj-null">No aplica</button>`;
+
+    // Descripción breve del nivel actual seleccionado
+    let descActual = '<span class="muted">Sin nivel seleccionado. Seleccione un nivel observado o «No valorado».</span>';
+    if (r.noValorado) {
+      descActual = '<strong>No valorado / no aplicable</strong> · El paciente no ha sido evaluado aún con la escala o no requiere sedación.';
+    } else if (r.nivelObservado != null) {
+      const item = niveles.find((x) => x.nivel === r.nivelObservado);
+      if (item) descActual = `<strong>${esc(item.titulo)}</strong> · <small>${esc(item.descripcion)}</small>`;
+    }
+
+    // Descripción breve del nivel objetivo seleccionado
+    let descObjetivo = '<span class="muted">Sin objetivo fijado (opcional). Seleccione un nivel objetivo o «No aplica».</span>';
+    if (r.nivelObjetivo === null) {
+      descObjetivo = '<strong>No aplica / sin objetivo profundo</strong> · No se persigue disminución intencionada de la consciencia.';
+    } else if (r.nivelObjetivo != null) {
+      const item = niveles.find((x) => x.nivel === r.nivelObjetivo);
+      if (item) descObjetivo = `<strong>${esc(item.titulo)}</strong> · <small>${esc(item.estadoClinico)}</small>`;
+    }
+
+    // Acordeón accesible de criterios completos (6 niveles validados según BMJ 1974 y SECPAL)
+    const tablaCriterios = niveles.map((n) => `
+      <div class="ramsay-criterio-item">
+        <div class="ramsay-criterio-head">
+          <span class="ramsay-badge-num">${n.nivel}</span>
+          <strong>${esc(n.titulo)}</strong>
         </div>
-        <p class="muted">Herramienta para monitorizar la profundidad de la sedación. La selección de un nivel <strong>nunca prescribe dosis automáticas</strong>; toda sedación exige indicación refractaria y consentimiento documentado.</p>
-        <div class="ramsay-grid">${tarjetasNiveles}</div>
-        ${evaluacion.valido ? `
-          <div class="alert ${evaluacion.concordancia === 'en_objetivo' ? 'verde' : 'ambar'} ramsay-eval-alert">
-            <strong>${esc(evaluacion.mensajeConcordancia)}</strong>
-            <p><small>${esc(evaluacion.advertencia)}</small></p>
+        <p class="ramsay-criterio-desc">${esc(n.descripcion)}</p>
+        <p class="ramsay-criterio-clinico"><small><em>Criterio clínico:</em> ${esc(n.estadoClinico)}</small></p>
+      </div>
+    `).join('');
+
+    cont.innerHTML = `
+      <div class="card">
+        <div class="card-head">
+          <h3>Nivel de sedación (Escala de Ramsay)</h3>
+          <span class="badge info">Valoración previa a tratamiento</span>
+        </div>
+        <p class="muted">Valoración clínica individualizada según guías SECPAL / INGESA 2021. La escala monitoriza confort y profundidad; <strong>nunca prescribe dosis ni fármacos automáticos</strong>.</p>
+
+        <div class="ramsay-control-bloque">
+          <label class="field-label">Nivel actual observado</label>
+          <div class="ramsay-seg-group" role="radiogroup" aria-label="Nivel actual observado">
+            ${btnsActual}
           </div>
-        ` : `<div class="alert ambar"><p><small>${esc(H.ESCALA_RAMSAY.advertenciaClinica)}</small></p></div>`}
+          <div class="ramsay-desc-box">${descActual}</div>
+        </div>
+
+        <div class="ramsay-control-bloque">
+          <label class="field-label">Objetivo individualizado</label>
+          <div class="ramsay-seg-group" role="radiogroup" aria-label="Objetivo individualizado">
+            ${btnsObjetivo}
+          </div>
+          <div class="ramsay-desc-box">${descObjetivo}</div>
+        </div>
+
+        <details class="ramsay-criterios-detalles">
+          <summary>📖 Consultar criterios clínicos completos (6 niveles validados)</summary>
+          <div class="ramsay-criterios-lista">
+            ${tablaCriterios}
+            <p class="ramsay-fuente"><small>Fuente: Ramsay MA, Savege TM, Simpson BR, Goodwin R. Controlled sedation with alphaxalone-alphadolone. BMJ 1974; 2(5920):656-659. Manual Merck y Guía SECPAL.</small></p>
+          </div>
+        </details>
+
         <div class="ramsay-doc-form">
-          <h5>Garantías y voluntades clínicas</h5>
+          <h5>Garantías clínicas y voluntades</h5>
           <div class="grid2">
             <label class="opt check">
               <input type="checkbox" data-act="toggle-voluntades" ${r.voluntadesAnticipadas ? 'checked' : ''}>
@@ -698,12 +759,87 @@
               <span>Consentimiento informado documentado</span>
             </label>
           </div>
-          <div class="form-group">
-            <label>Preferencias del paciente (consciencia, comunicación, alivio):</label>
-            <input type="text" id="ramsay-pref-input" placeholder="Ej: Deseo de permanecer comunicable o alivio pleno de disnea" value="${esc(r.preferencias)}">
+          <div class="form-group" style="margin-top: .6rem;">
+            <label for="ramsay-pref-input">Preferencias y objetivos del paciente:</label>
+            <input type="text" id="ramsay-pref-input" placeholder="Ej: Mantener capacidad de comunicación o alivio pleno de disnea refractaria" value="${esc(r.preferencias)}">
           </div>
         </div>
-      </div>`;
+
+        <div class="btn-row" style="margin-top: 1.2rem;">
+          <button class="btn primary" type="button" data-act="ramsay-continuar">Continuar a propuestas de tratamiento →</button>
+          <button class="btn ghost" type="button" data-act="ramsay-atras">← Atrás</button>
+          <button class="btn ghost" type="button" data-act="reiniciar">Reiniciar</button>
+        </div>
+      </div>
+    `;
+  }
+
+  /* HYP-010: Resumen estructurado de la valoración de Ramsay para la revisión de tratamiento */
+  function renderRamsayResumen() {
+    const r = state.ramsay;
+    const niveles = H.ESCALA_RAMSAY.niveles;
+
+    let nivelObsTexto = 'No valorado';
+    if (!r.noValorado && r.nivelObservado != null) {
+      const it = niveles.find((x) => x.nivel === r.nivelObservado);
+      nivelObsTexto = it ? `Nivel ${r.nivelObservado} (${it.titulo.split(':')[1]?.trim() || it.titulo})` : `Nivel ${r.nivelObservado}`;
+    }
+
+    let nivelObjTexto = 'No aplica / sin objetivo fijado';
+    if (r.nivelObjetivo != null) {
+      const it = niveles.find((x) => x.nivel === r.nivelObjetivo);
+      nivelObjTexto = it ? `Nivel ${r.nivelObjetivo} (${it.titulo.split(':')[1]?.trim() || it.titulo})` : `Nivel ${r.nivelObjetivo}`;
+    }
+
+    const evaluacion = H.evaluarRamsay({
+      nivelObservado: r.noValorado ? null : r.nivelObservado,
+      nivelObjetivo: r.nivelObjetivo,
+      noValorado: r.noValorado,
+      preferenciasPaciente: r.preferencias,
+      voluntadesAnticipadas: r.voluntadesAnticipadas,
+      representanteLegal: r.representanteLegal,
+      consentimientoDocumentado: r.consentimientoDocumentado,
+    });
+
+    const garantias = [];
+    if (r.voluntadesAnticipadas) garantias.push('Voluntades anticipadas consultadas');
+    if (r.representanteLegal) garantias.push('Familia/representante informado');
+    if (r.consentimientoDocumentado) garantias.push('Consentimiento informado');
+    const garantiasHtml = garantias.length
+      ? garantias.map((g) => `<span class="badge verde">✓ ${esc(g)}</span>`).join(' ')
+      : '<span class="muted">Pendiente de registro de garantías éticas documentadas.</span>';
+
+    return `
+      <div class="card ramsay-resumen-card">
+        <div class="card-head">
+          <div class="ramsay-resumen-title">
+            <span class="ramsay-moon-ico" aria-hidden="true">🌙</span>
+            <h4>Valoración de sedación (Ramsay)</h4>
+          </div>
+          <button class="btn ghost btn-sm" type="button" data-act="ramsay-editar">✏️ Modificar valoración</button>
+        </div>
+        <div class="ramsay-resumen-grid">
+          <div class="ramsay-resumen-item">
+            <span class="ramsay-resumen-lbl">Nivel actual observado:</span>
+            <strong class="ramsay-resumen-val">${esc(nivelObsTexto)}</strong>
+          </div>
+          <div class="ramsay-resumen-item">
+            <span class="ramsay-resumen-lbl">Objetivo terapéutico:</span>
+            <strong class="ramsay-resumen-val">${esc(nivelObjTexto)}</strong>
+          </div>
+        </div>
+        ${evaluacion.valido && !evaluacion.noValorado ? `
+          <div class="alert ${evaluacion.concordancia === 'en_objetivo' ? 'verde' : 'ambar'} ramsay-eval-alert">
+            <strong>${esc(evaluacion.mensajeConcordancia)}</strong>
+            <p><small>${esc(evaluacion.advertencia)}</small></p>
+          </div>
+        ` : `<div class="alert ambar"><p><small>${esc(H.ESCALA_RAMSAY.advertenciaClinica)}</small></p></div>`}
+        <div class="ramsay-garantias-row">
+          <div class="ramsay-garantias-list">${garantiasHtml}</div>
+          ${r.preferencias ? `<p class="ramsay-pref-resumen"><small><strong>Preferencias:</strong> ${esc(r.preferencias)}</small></p>` : ''}
+        </div>
+      </div>
+    `;
   }
 
   function renderPlan(cont) {
@@ -715,17 +851,21 @@
     const mida = plan.ofreceMidazolamDisnea
       ? `<label class="opt check"><input type="checkbox" data-act="mida-disnea"${g.resp.midazolamDisnea ? ' checked' : ''}> <span>Añadir midazolam para la disnea (reservado si hay ansiedad/pánico asociado)</span></label>`
       : '';
-    const ramsayHtml = (g.resp.sintomas && g.resp.sintomas.indexOf('sedacion') !== -1) ? renderRamsayComponente() : '';
+
+    // HYP-010: Resumen de la valoración de Ramsay visible durante la revisión del tratamiento
+    const ramsayResumenHtml = (esRutaSedacion() || state.ramsay.nivelObservado != null || state.ramsay.noValorado)
+      ? renderRamsayResumen()
+      : '';
 
     cont.innerHTML = `
       ${bloq}
       ${dest}
-      <div class="card"><h3>Plan orientativo</h3>
+      ${ramsayResumenHtml}
+      <div class="card"><h3>Propuestas de tratamiento orientativas</h3>
         ${mida}
         ${sug ? `<ul class="lista">${sug}</ul>` : '<p class="muted">Sin fármacos sugeridos automáticamente.</p>'}
         ${plan.advertencias.length ? `<div class="alert ambar"><strong>⚠️ A tener en cuenta</strong>${plan.advertencias.map((a) => `<p>${esc(a)}</p>`).join('')}</div>` : ''}
       </div>
-      ${ramsayHtml}
       <div class="card"><h3>Medidas generales</h3><ul class="lista">${plan.medidas.map((m) => `<li>${esc(m)}</li>`).join('')}</ul></div>
       <div class="btn-row">
         ${plan.sugerencias.length ? '<button class="btn primary" type="button" data-act="cargar">💉 Cargar en Infusor</button>' : ''}
@@ -740,6 +880,7 @@
     g.paso = 0;
     g.resp = {};
     g.plan = null;
+    g.ramsayCompletada = false;
     state.rows = []; // Constructor vacío (Corrección 3)
     state.ultimo = null;
     state.aplicada = null;
@@ -748,6 +889,7 @@
     state.ramsay = {
       nivelObservado: null,
       nivelObjetivo: null,
+      noValorado: false,
       preferencias: '',
       voluntadesAnticipadas: false,
       representanteLegal: false,
@@ -808,9 +950,10 @@
           g.paso++; renderGuiado();
         } else if (a === 'atras') {
           g.paso = Math.max(0, g.paso - 1);
+          g.ramsayCompletada = false;
           renderGuiado();
         } else if (a === 'reiniciar') {
-          g.paso = 0; g.resp = {}; renderGuiado();
+          g.paso = 0; g.resp = {}; g.ramsayCompletada = false; renderGuiado();
         } else if (a === 'nueva') {
           nuevaConsulta(); toast('Nueva consulta iniciada');
         } else if (a === 'cargar' && g.plan) {
@@ -818,11 +961,29 @@
           state.aplicada = null;
           renderRows(); recalcular(); switchTab('rapido'); toast('Sugerencias cargadas en el infusor');
         } else if (a === 'set-ramsay-obs') {
+          state.ramsay.noValorado = false;
           state.ramsay.nivelObservado = Number(act.dataset.nivel);
-          renderPlan(cont);
+          renderGuiado();
+        } else if (a === 'set-ramsay-obs-noval') {
+          state.ramsay.noValorado = true;
+          state.ramsay.nivelObservado = null;
+          renderGuiado();
         } else if (a === 'set-ramsay-obj') {
           state.ramsay.nivelObjetivo = Number(act.dataset.nivel);
-          renderPlan(cont);
+          renderGuiado();
+        } else if (a === 'set-ramsay-obj-null') {
+          state.ramsay.nivelObjetivo = null;
+          renderGuiado();
+        } else if (a === 'ramsay-continuar') {
+          g.ramsayCompletada = true;
+          renderGuiado();
+        } else if (a === 'ramsay-atras') {
+          g.paso = Math.max(0, H.GUIA_PASOS.length - 1);
+          g.ramsayCompletada = false;
+          renderGuiado();
+        } else if (a === 'ramsay-editar') {
+          g.ramsayCompletada = false;
+          renderGuiado();
         }
       }
     });

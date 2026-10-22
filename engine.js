@@ -235,22 +235,22 @@
     },
     dia_7: {
       id: 'dia_7',
-      nombre: 'Baxter Infusor LV1.5 ~7 días · 250 ml @ 1,5 ml/h (~167 h)',
+      nombre: 'Baxter Infusor LV1.5 7 días · 252 ml @ 1,5 ml/h (168 h)',
       fabricante: 'Baxter (Large Volume Infusor LV1.5 · ref. 2C1087KP)',
       referenciaFabricante: '2C1087KP',
       verificadoFabricante: true,
-      llenado: 250,
+      llenado: 252,
       llenadoMin: 227,
       maxLlenado: 300,
-      volumenReal: 250,
+      volumenReal: 252,
       ritmo: 1.5,
       minRitmo: 1.5,
       maxRitmo: 1.5,
       precisionPct: 10,
       diasCategoria: 7,
-      etiquetaCorta: 'Volumen: 250 ml · Caudal: 1,5 ml/h (~7 días)',
+      etiquetaCorta: 'Volumen: 252 ml · Caudal: 1,5 ml/h (168 h · 7 días)',
       fuente:
-        'Baxter Elastomeric Products Professional Guide (p. 15, Large Volume Infusor LV1.5, ref. 2C1087KP): capacidad nominal 250 ml (rango admitido 227–300 ml; esta pauta prepara 250 ml de llenado nominal), caudal nominal 1,5 ml/h, duración calculada 166,7 h (~7 días / 6 días 22 h 40 min; rango admisible 152,7–186,7 h), precisión ±10 %. Se corrigió la designación de 252 ml eliminando la capacidad física ficticia (Corrección 12).',
+        'Baxter Elastomeric Products Healthcare Professional Guide (p. 15, Large Volume Infusor LV1.5, ref. 2C1087KP): capacidad nominal 250 ml con rango admisible documentado por el fabricante de 227–300 ml. El llenado de 252 ml a caudal nominal de 1,5 ml/h entrega exactamente 168 h (7 días completos: 252 ml ÷ 1,5 ml/h = 168 h), manteniendo coherencia física estricta entre volumen, ritmo y duración (HYP-008).',
     },
     custom: {
       id: 'custom',
@@ -280,8 +280,7 @@
       'Perfil heredado sfs2_252 retirado por seguridad: calculaba dosis para 252 ml (126 h) diluyendo hasta 250 ml (125 h). En el catálogo oficial Nipro Surefuser™+ (p. 3), el modelo SFS-2-25P-EJ es de 250 ml @ 2,0 ml/h (125 h, id "sfs2_250").',
     dia_60:
       'Perfil heredado dia_60 (60 ml @ 2,5 ml/h) retirado por no contar con referencia respaldada en los catálogos verificados (B. Braun enumera LT 60-12-S a 5 ml/h y LT 60-30-S a 2 ml/h). Utilice B. Braun Easypump® II LT 60-30-S (ref. 4540010) a 48 ml (dia_48, 24 h) o a 60 ml nominales (easypump_60_30, 30 h).',
-    capacidad_252:
-      'Capacidad física de 252 ml eliminada del catálogo: los dispositivos de gran volumen (Baxter LV y Nipro SFS-2) tienen capacidad nominal de 250 ml (o 240 ml). Calcular sobre 252 ml procedía de multiplicar 1,5 ml/h × 168 h, pero un depósito de 250 ml a 1,5 ml/h entrega un tiempo real de 166,67 h (~6 días 22 h 40 min). Use la entrada nominal verificada de 250 ml (dia_7).',
+
   };
 
   /* Límites operativos para validación de dispositivos y entradas personalizadas */
@@ -521,6 +520,23 @@
   };
 
   function evaluarRamsay(datos = {}) {
+    if (datos.noValorado || (datos.nivelObservado == null && (datos.nivelObjetivo == null || datos.nivelObjetivo === ''))) {
+      return {
+        valido: true,
+        noValorado: true,
+        nivelObservado: null,
+        nivelObjetivo: null,
+        concordancia: 'no_valorado',
+        mensajeConcordancia: 'Nivel de sedación no valorado o no aplicable en esta consulta.',
+        preferenciasPaciente: datos.preferenciasPaciente || null,
+        voluntadesAnticipadas: Boolean(datos.voluntadesAnticipadas),
+        representanteLegal: Boolean(datos.representanteLegal),
+        consentimientoDocumentado: Boolean(datos.consentimientoDocumentado),
+        advertencia: ESCALA_RAMSAY.advertenciaClinica,
+        fuente: ESCALA_RAMSAY.fuente,
+        escala: ESCALA_RAMSAY,
+      };
+    }
     const obs = Number(datos.nivelObservado);
     const obj = datos.nivelObjetivo != null && datos.nivelObjetivo !== '' ? Number(datos.nivelObjetivo) : null;
     const nivelObsValido = Number.isInteger(obs) && obs >= 1 && obs <= 6;
@@ -628,6 +644,20 @@
       id: 'metoclopramida', nombre: 'Metoclopramida', unidad: 'mg/día',
       presentaciones: [{ id: 'meto_10', label: 'Ampolla 10 mg/2 ml', mg: 10, ml: 2, envase: 'ampolla', cima: '40256' }],
       rescate: { tipo: 'fijo', mgMin: 10, mgMax: 10, intervaloH: 8, indicacion: 'si náuseas/vómitos' },
+    },
+    ketorolaco: {
+      id: 'ketorolaco',
+      nombre: 'Ketorolaco trometamol',
+      unidad: 'mg/día',
+      bloqueadoSC: true,
+      estadoCatalogo: 'incorporado_bloqueado_sc',
+      motivoBloqueoSC:
+        'Ficha técnica AEMPS/CIMA (reg. 70102, rev. junio 2023) autoriza exclusivamente administración IV e IM, con duración parenteral máxima estricta de 2 días (48 horas) por riesgo elevado de hemorragia digestiva grave y fracaso renal agudo. ' +
+        'La vía subcutánea no está autorizada en ficha técnica. Su empleo en infusión subcutánea continua mediante infusor elastomérico constituye un uso fuera de indicación («off-label») no validado clínicamente. Requiere validación institucional de estabilidad y compatibilidad en elastómeros antes de autorizar su preparación.',
+      presentaciones: [
+        { id: 'keto_30', label: 'Ampolla 30 mg/1 ml (Normon · reg. CIMA 70102)', mg: 30, ml: 1, envase: 'ampolla', cima: '70102' },
+      ],
+      rescate: null,
     },
   };
 
@@ -869,6 +899,16 @@
 
     if (ctx.metadona) {
       alertas.push(bloqueoMetadona());
+    }
+    if (ids.indexOf('ketorolaco') !== -1) {
+      alertas.push({
+        nivel: 'rojo',
+        codigo: 'KETOROLACO_BLOQUEADO_SC',
+        titulo: 'Ketorolaco bloqueado para infusión continua SC',
+        mensaje:
+          'Ketorolaco trometamol (reg. CIMA 70102): Ficha técnica autoriza exclusivamente vía IV/IM y un máximo de 2 días parenteral por riesgo hemorrágico y renal. ' +
+          'Su infusión subcutánea continua en infusor elastomérico carece de validación clínica institucional de estabilidad y compatibilidad en mezclas. Bloqueado para preparación en infusor SC.',
+      });
     }
     if (ctx.volumenExcedido) {
       alertas.push({
